@@ -22,6 +22,35 @@ app.use(async (ctx, next) => {
   }
 });
 
+// Middleware for Admin Auth
+app.use(async (ctx, next) => {
+  if (ctx.request.url.pathname.startsWith("/admin") || ctx.request.url.pathname.startsWith("/api/admin")) {
+    const adminPassword = Deno.env.get("ADMIN_PASSWORD");
+    if (adminPassword) {
+      const authHeader = ctx.request.headers.get("Authorization");
+      if (!authHeader) {
+        ctx.response.status = 401;
+        ctx.response.headers.set("WWW-Authenticate", 'Basic realm="Admin Area"');
+        return;
+      }
+      const [type, credentials] = authHeader.split(" ");
+      if (type !== "Basic") {
+         ctx.response.status = 401;
+         return;
+      }
+      const decoded = atob(credentials);
+      const [user, pass] = decoded.split(":");
+      // Username can be anything, check password
+      if (pass !== adminPassword) {
+         ctx.response.status = 403;
+         ctx.response.body = "Forbidden";
+         return;
+      }
+    }
+  }
+  await next();
+});
+
 // Middleware for static files
 app.use(async (ctx, next) => {
   await next();
@@ -113,16 +142,20 @@ router.post("/api/admin/teams", async (ctx) => {
   
   try {
     const session = JSON.parse(session_data);
+    
+    // Validate Session JSON
+    if (!session.accessToken || !session.user?.id) {
+        ctx.response.status = 400;
+        ctx.response.body = { success: false, error: "Invalid Session JSON: Missing accessToken or user.id" };
+        return;
+    }
+
     const accessToken = session.accessToken;
-    const accountId = session.user.id; // Or wherever account ID is
-    // Note: Python code implies account ID is extracted. 
-    // Usually it's in the URL or user profile.
-    // Let's assume user provides correct JSON or we extract what we can.
-    // Ideally we verify token validity here.
+    const accountId = session.user.id;
 
     await DB.createTeam({
       name,
-      accountId: accountId || "unknown", // Fallback
+      accountId,
       accessToken,
       email: session.user.email
     });
@@ -265,7 +298,8 @@ router.post("/api/join", async (ctx) => {
        await DB.updateTeam(selectedTeam.id, { tokenStatus: "expired" });
     }
     ctx.response.status = 500;
-    ctx.response.body = { success: false, error: "Invite failed. Please try again later." };
+    // Expose the error message to help debug (e.g., 401, 404 from upstream)
+    ctx.response.body = { success: false, error: `Invite failed: ${e.message}` };
   }
 });
 
