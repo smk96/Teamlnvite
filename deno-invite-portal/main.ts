@@ -194,6 +194,43 @@ async function kickMember(accessToken: string, accountId: string, userId: string
   return true;
 }
 
+async function createCheckoutLink(accessToken: string) {
+  const url = "https://chatgpt.com/backend-api/payments/checkout";
+  const headers = {
+    "accept": "*/*",
+    "authorization": `Bearer ${accessToken}`,
+    "content-type": "application/json",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  };
+
+  const payload = {
+    plan_name: "chatgptteamplan",
+    team_plan_data: {
+      workspace_name: "time machine",
+      price_interval: "month",
+      seat_quantity: 5
+    },
+    promo_campaign: {
+      promo_campaign_id: "team-1-month-free",
+      is_coupon_from_query_param: true
+    },
+    checkout_ui_mode: "redirect"
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  if (res.status !== 200) {
+    const text = await res.text();
+    throw new Error(`Checkout failed: ${res.status} - ${text}`);
+  }
+
+  return await res.json();
+}
+
 // --- Routes ---
 
 // 1. Pages
@@ -384,6 +421,25 @@ router.delete("/api/admin/keys/:code", async (ctx) => {
   const code = ctx.params.code;
   await DB.deleteAccessKey(code);
   ctx.response.body = { success: true };
+});
+
+router.post("/api/admin/checkout-link", async (ctx) => {
+  const teams = await DB.listTeams();
+  const activeTeam = teams.find((t) => t.tokenStatus !== "expired");
+
+  if (!activeTeam) {
+    ctx.response.status = 400;
+    ctx.response.body = { success: false, error: "没有可用的 Team Token" };
+    return;
+  }
+
+  try {
+    const data = await createCheckoutLink(activeTeam.accessToken);
+    ctx.response.body = { success: true, url: data.url };
+  } catch (e) {
+    ctx.response.status = 500;
+    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Checkout failed" };
+  }
 });
 
 // 4. Join API
