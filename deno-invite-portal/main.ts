@@ -99,8 +99,8 @@ async function inviteToTeam(accessToken: string, accountId: string, email: strin
   };
   
   const body = {
-    email,
-    role: "standard"
+    email_addresses: [email],
+    role: "standard-user"
   };
 
   const res = await fetch(url, {
@@ -144,20 +144,30 @@ router.post("/api/admin/teams", async (ctx) => {
     const session = JSON.parse(session_data);
     
     // Validate Session JSON
-    if (!session.accessToken || !session.user?.id) {
+    // We prioritize checking for an explicit 'accountId' field,
+    // because 'user.id' is often 'user-xxx' which is NOT a UUID and fails the API check.
+    if (!session.accessToken) {
         ctx.response.status = 400;
-        ctx.response.body = { success: false, error: "Invalid Session JSON: Missing accessToken or user.id" };
+        ctx.response.body = { success: false, error: "Invalid Session JSON: Missing accessToken" };
         return;
     }
 
     const accessToken = session.accessToken;
-    const accountId = session.user.id;
+    // Use explicit accountId if provided, otherwise fallback to user.id (which might fail if it's not a UUID)
+    // We recommend users to provide "accountId" in the JSON.
+    const accountId = session.accountId || session.user?.id;
+    
+    if (!accountId) {
+       ctx.response.status = 400;
+       ctx.response.body = { success: false, error: "Invalid Session JSON: Missing accountId or user.id" };
+       return;
+    }
 
     await DB.createTeam({
       name,
       accountId,
       accessToken,
-      email: session.user.email
+      email: session.user?.email // Use optional chaining
     });
     ctx.response.body = { success: true };
   } catch (e) {
