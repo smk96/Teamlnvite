@@ -1,142 +1,119 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChatGPT Team 管理后台</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); padding: 40px; }
-        h1 { color: #333; margin-bottom: 30px; font-size: 32px; text-align: center; }
-        h2 { color: #555; margin: 30px 0 20px 0; font-size: 24px; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
-        .section { margin-bottom: 40px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; color: #555; font-weight: 500; }
-        input[type="text"], input[type="email"], input[type="number"], textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: border-color 0.3s; }
-        input[type="text"]:focus, input[type="email"]:focus, input[type="number"]:focus, textarea:focus { outline: none; border-color: #667eea; }
-        input[type="checkbox"] { width: 18px; height: 18px; margin-right: 8px; cursor: pointer; }
-        textarea { min-height: 100px; resize: vertical; font-family: monospace; }
-        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; display: inline-block; }
-        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
-        .btn-secondary { background: #6c757d; color: white; }
-        .btn-secondary:hover { background: #5a6268; }
-        .btn-danger { background: #dc3545; color: white; }
-        .btn-danger:hover { background: #c82333; }
-        .btn-sm { padding: 8px 16px; font-size: 12px; }
-        .teams-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; margin-top: 20px; }
-        .team-card { border: 2px solid #e0e0e0; border-radius: 12px; padding: 20px; transition: all 0.3s; }
-        .team-card:hover { border-color: #667eea; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); }
-        .team-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .team-header h3 { color: #333; font-size: 18px; }
-        .team-info { margin-bottom: 15px; }
-        .team-info p { margin: 8px 0; color: #666; font-size: 14px; }
-        .team-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .badge { display: inline-block; padding: 4px 12px; background: #667eea; color: white; border-radius: 12px; font-size: 12px; font-weight: 600; }
-        .badge-owner { background: #ffc107; }
-        .badge-temp { background: #ff6b6b; }
-        .badge-success { background: #28a745; }
-        .badge-error { background: #dc3545; }
-        code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
-        .key-code { background: #fff3cd; color: #856404; padding: 4px 8px; font-weight: 600; }
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); }
-        .modal-content { background-color: white; margin: 5% auto; padding: 30px; border-radius: 12px; width: 90%; max-width: 800px; max-height: 80vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .close { color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; }
-        .close:hover { color: #000; }
-        .members-list, .keys-list { margin-top: 20px; }
-        .member-item, .key-item { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .member-info, .key-info { flex: 1; }
-        .member-meta, .key-meta { display: flex; gap: 15px; margin-top: 5px; }
-        .log-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .log-table th, .log-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e0e0e0; }
-        .log-table th { background: #f8f9fa; font-weight: 600; color: #333; }
-        .log-table tr:hover { background: #f8f9fa; }
-    </style>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
-
 <body>
-    <div class="container">
-        <h1>🎯 ChatGPT Team 管理后台 (Deno Edition)</h1>
-
-        <!-- 添加 Team -->
-        <div class="section">
-            <h2>➕ 添加新 Team</h2>
-            <form id="addTeamForm" onsubmit="addTeam(event)">
-                <div class="form-group">
-                    <label>Team 名称:</label>
-                    <input type="text" name="name" required>
+    <div class="page admin-page">
+        <div class="shell">
+            <section class="hero reveal">
+                <div class="hero-card">
+                    <div class="hero-badge">Admin Console · Deno Edition</div>
+                    <h1 class="hero-title">ChatGPT Team 管理后台</h1>
+                    <p class="hero-subtitle">集中管理 Team、邀请码与自动踢人配置，所有操作实时生效。</p>
                 </div>
-                <div class="form-group">
-                    <label>Session JSON (从浏览器复制):</label>
-                    <textarea name="session_data" required placeholder='{"user": {...}, "accessToken": "..."}' rows="6"></textarea>
+                <div class="ornament">
+                    <h3>快速指引</h3>
+                    <ul>
+                        <li><span>1</span>先添加 Team</li>
+                        <li><span>2</span>生成邀请码</li>
+                        <li><span>3</span>配置自动踢人</li>
+                    </ul>
                 </div>
-                <button type="submit" class="btn btn-primary">添加 Team</button>
-            </form>
-        </div>
+            </section>
 
-        <!-- 邀请码管理 -->
-        <div class="section">
-            <h2>🔑 邀请码管理</h2>
-            <div style="margin-bottom: 20px;">
-                <form id="createKeyForm" onsubmit="createKeys(event)" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
-                    <div class="form-group" style="margin: 0;">
-                        <label>生成数量:</label>
-                        <input type="number" id="key_count" name="count" value="1" min="1" max="20" style="width: 100px;">
+            <section class="main-card reveal">
+                <div class="section-title">添加新 Team</div>
+                <form id="addTeamForm" class="form-grid" onsubmit="addTeam(event)">
+                    <div class="form-row">
+                        <div class="field">
+                            <label for="team_name">Team 名称 <span class="required">*</span></label>
+                            <input type="text" id="team_name" name="name" placeholder="例如：Design Team" required>
+                        </div>
                     </div>
-                    <div class="form-group" style="margin: 0;">
-                        <label>
-                            <input type="checkbox" id="key_is_temp">
-                            1日试用邀请码 (24小时后自动踢出)
+                    <div class="field">
+                        <label for="session_data">Session JSON <span class="required">*</span></label>
+                        <textarea id="session_data" name="session_data" rows="6" placeholder='{"user": {...}, "accessToken": "..."}' required></textarea>
+                    </div>
+                    <div class="helper">提示：请从浏览器复制完整 session JSON。</div>
+                    <div class="actions">
+                        <button type="submit" class="btn btn-primary">添加 Team</button>
+                        <button type="reset" class="btn btn-ghost">清空</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="main-card reveal">
+                <div class="section-title">邀请码管理</div>
+                <form id="createKeyForm" class="form-grid" onsubmit="createKeys(event)">
+                    <div class="form-row">
+                        <div class="field">
+                            <label for="key_count">生成数量</label>
+                            <input type="number" id="key_count" name="count" value="1" min="1" max="20">
+                        </div>
+                        <div class="field checkbox-field">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="key_is_temp">
+                                1 日试用邀请码（24 小时后自动踢出）
+                            </label>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button type="submit" class="btn btn-primary">生成邀请码</button>
+                    </div>
+                </form>
+
+                <div class="actions actions-inline">
+                    <button onclick="toggleKeysList()" class="btn btn-primary" id="toggleKeysBtn">查看邀请码</button>
+                    <button onclick="copyAllNormalKeys()" class="btn btn-ghost">一键复制所有普通邀请码</button>
+                    <button onclick="copyAllTempKeys()" class="btn btn-ghost">一键复制所有 1 日试用码</button>
+                </div>
+
+                <div id="keysList" class="list-panel" style="display: none;"></div>
+            </section>
+
+            <section class="main-card reveal">
+                <div class="section-title">Auto-Kick 配置</div>
+                <form id="autoKickConfigForm" class="form-grid" onsubmit="saveAutoKickConfig(event)">
+                    <div class="field checkbox-field">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="auto_kick_enabled" name="enabled">
+                            启用自动踢人
                         </label>
                     </div>
-                    <button type="submit" class="btn btn-primary">生成邀请码</button>
-                </form>
-            </div>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button onclick="toggleKeysList()" class="btn btn-primary" id="toggleKeysBtn">👁️ 查看邀请码</button>
-                <button onclick="copyAllNormalKeys()" class="btn btn-primary">📋 一键复制所有普通邀请码</button>
-                <button onclick="copyAllTempKeys()" class="btn btn-primary" style="background: #ff6b6b;">📋 一键复制所有1日试用码</button>
-            </div>
-            <div id="keysList" style="display: none;"></div>
-        </div>
-
-        <!-- Auto-Kick 配置 -->
-        <div class="section">
-            <h2>⚙️ Auto-Kick 配置</h2>
-            <form id="autoKickConfigForm" onsubmit="saveAutoKickConfig(event)">
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="auto_kick_enabled" name="enabled">
-                        启用自动踢人
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>检测间隔 (秒):</label>
-                    <input type="number" id="check_interval" name="check_interval" value="300" min="60">
-                </div>
-                <div class="form-group">
-                    <label>运行时间段 (北京时间):</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="number" id="start_hour" name="start_hour" value="0" min="0" max="23" style="width: 80px;">
-                        <span>时 至</span>
-                        <input type="number" id="end_hour" name="end_hour" value="23" min="0" max="23" style="width: 80px;">
-                        <span>时</span>
+                    <div class="form-row">
+                        <div class="field">
+                            <label for="check_interval">检测间隔（秒）</label>
+                            <input type="number" id="check_interval" name="check_interval" value="300" min="60">
+                        </div>
+                        <div class="field">
+                            <label>运行时间段（北京时间）</label>
+                            <div class="inline-fields">
+                                <input type="number" id="start_hour" name="start_hour" value="0" min="0" max="23">
+                                <span>时 至</span>
+                                <input type="number" id="end_hour" name="end_hour" value="23" min="0" max="23">
+                                <span>时</span>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <button type="submit" class="btn btn-primary">保存配置</button>
-            </form>
-        </div>
+                    <div class="actions">
+                        <button type="submit" class="btn btn-primary">保存配置</button>
+                    </div>
+                </form>
+            </section>
 
-        <!-- Teams 列表 -->
-        <div class="section">
-            <h2>📋 Teams 列表</h2>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button onclick="toggleTeamsList()" class="btn btn-primary" id="toggleTeamsBtn">👁️ 查看Teams</button>
-            </div>
-            <div id="teamsList" style="display: none;"></div>
+            <section class="main-card reveal">
+                <div class="section-title">Teams 列表</div>
+                <div class="actions actions-inline">
+                    <button onclick="toggleTeamsList()" class="btn btn-primary" id="toggleTeamsBtn">查看 Teams</button>
+                </div>
+                <div id="teamsList" class="list-panel" style="display: none;"></div>
+            </section>
+
+            <div class="footer">© ChatGPT Team Invite Portal · Admin</div>
         </div>
     </div>
 
@@ -154,11 +131,11 @@
             const toggleBtn = document.getElementById('toggleKeysBtn');
             if (keysList.style.display === 'none') {
                 keysList.style.display = 'block';
-                toggleBtn.textContent = '👁️‍🗨️ 隐藏邀请码';
+                toggleBtn.textContent = '隐藏邀请码';
                 if (!keysLoaded) { loadKeys(); keysLoaded = true; }
             } else {
                 keysList.style.display = 'none';
-                toggleBtn.textContent = '👁️ 查看邀请码';
+                toggleBtn.textContent = '查看邀请码';
             }
         }
 
@@ -167,11 +144,11 @@
             const toggleBtn = document.getElementById('toggleTeamsBtn');
             if (teamsList.style.display === 'none') {
                 teamsList.style.display = 'block';
-                toggleBtn.textContent = '👁️‍🗨️ 隐藏Teams';
+                toggleBtn.textContent = '隐藏 Teams';
                 if (!teamsLoaded) { loadTeams(); teamsLoaded = true; }
             } else {
                 teamsList.style.display = 'none';
-                toggleBtn.textContent = '👁️ 查看Teams';
+                toggleBtn.textContent = '查看 Teams';
             }
         }
 
@@ -221,20 +198,17 @@
             }
             let html = '<div class="keys-list">';
             keys.forEach(key => {
-                const keyCode = key.code; // Adjusted for API mismatch if needed
+                const keyCode = key.code;
                 html += `
                     <div class="key-item">
                         <div class="key-info">
                             <div>
                                 <code class="key-code">${keyCode}</code>
-                                <div style="margin-top: 8px;">
-                                    ${key.isTemp ? '<span class="badge badge-temp">1日试用</span>' : '<span class="badge">永久</span>'}
+                                <div class="meta-row">
+                                    ${key.isTemp ? '<span class="badge badge-temp">1 日试用</span>' : '<span class="badge">永久</span>'}
                                     <span class="badge">使用 ${key.usageCount} 次</span>
                                 </div>
                             </div>
-                        </div>
-                        <div style="display: flex; gap: 8px;">
-                             <!-- Delete not impl yet -->
                         </div>
                     </div>
                 `;
@@ -322,7 +296,7 @@
                             <p><strong>状态:</strong> ${team.tokenStatus}</p>
                         </div>
                         <div class="team-actions">
-                            <button onclick="deleteTeam('${team.id}')" class="btn btn-danger btn-sm">🗑️ 删除</button>
+                            <button onclick="deleteTeam('${team.id}')" class="btn btn-danger btn-sm">删除</button>
                         </div>
                     </div>
                 `;
@@ -332,7 +306,7 @@
         }
 
         async function deleteTeam(teamId) {
-            if (!confirm(`确定要删除吗？`)) return;
+            if (!confirm('确定要删除吗？')) return;
             try {
                 const response = await fetch(`/api/admin/teams/${teamId}`, { method: 'DELETE' });
                 const data = await response.json();
@@ -340,14 +314,13 @@
                 else alert('错误: ' + data.error);
             } catch (error) { alert('请求失败: ' + error.message); }
         }
-        
-        // Key copy functions
+
         function copyAllNormalKeys() {
-            const keys = allKeys.filter(k => !k.isTemp).map(k => k.code).join('\\n');
+            const keys = allKeys.filter(k => !k.isTemp).map(k => k.code).join('\n');
             navigator.clipboard.writeText(keys).then(() => alert('已复制'));
         }
         function copyAllTempKeys() {
-             const keys = allKeys.filter(k => k.isTemp).map(k => k.code).join('\\n');
+            const keys = allKeys.filter(k => k.isTemp).map(k => k.code).join('\n');
             navigator.clipboard.writeText(keys).then(() => alert('已复制'));
         }
     </script>
