@@ -322,7 +322,18 @@ router.get("/api/admin/teams/:id/members", async (ctx) => {
 
   try {
     const members = await fetchTeamMembers(team.accessToken, team.accountId);
-    ctx.response.body = { success: true, members };
+    const enrichedMembers = await Promise.all(
+      (members || []).map(async (member: any) => {
+        const email = String(member?.email || "").toLowerCase();
+        if (!email) return member;
+        const invite = await DB.getLatestInvitationByEmail(team.id, email);
+        return {
+          ...member,
+          joined_at: invite?.createdAt || null
+        };
+      })
+    );
+    ctx.response.body = { success: true, members: enrichedMembers };
   } catch (e) {
     ctx.response.status = 500;
     ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Failed to fetch members" };
