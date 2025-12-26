@@ -23,6 +23,7 @@ export interface AccessKey {
   code: string; // Primary Key
   teamId?: string; // If bound to a specific team
   isTemp: boolean; // 1-day temp key
+  isUnlimited: boolean; // special key can be reused
   tempHours?: number;
   usageCount: number;
   createdAt: number;
@@ -107,6 +108,7 @@ export const DB = {
   async createAccessKey(key: Omit<AccessKey, "createdAt" | "usageCount">) {
     const newKey: AccessKey = {
       ...key,
+      isUnlimited: key.isUnlimited ?? false,
       usageCount: 0,
       createdAt: Date.now(),
     };
@@ -192,6 +194,21 @@ export const DB = {
     const updated = { ...inv, ...updates };
     await kv.set(["invitations", id], updated);
     return updated;
+  },
+
+  async deleteInvitationsByEmail(teamId: string, email: string) {
+    const normalized = email.toLowerCase();
+    const invites = await this.listInvitations();
+    const matches = invites.filter(
+      (inv) => inv.teamId === teamId && inv.email.toLowerCase() === normalized
+    );
+
+    for (const inv of matches) {
+      await kv.delete(["invitations", inv.id]);
+    }
+    await kv.delete(["invitations_by_email", normalized, teamId]);
+
+    return matches.length;
   },
 
   // --- Config ---
