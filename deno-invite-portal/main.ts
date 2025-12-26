@@ -251,23 +251,24 @@ router.post("/api/join", async (ctx) => {
     return;
   }
 
-  // 3. Find Available Team
+  // 3. Find Available Team (actively refresh member count + token status)
   const teams = await DB.listTeams();
   let selectedTeam: Team | null = null;
-  
-  // Sort by members count asc, then last invite time
-  // Need to fetch real member count? Or rely on cache.
-  // For now, rely on cache or just round robin.
-  // Simple logic: Find first team with < 4 members.
-  
+
   for (const team of teams) {
     if (team.tokenStatus === "expired") continue;
-    // We should ideally sync member count before checking
-    // But for speed, let's trust our cache or check specifically
-    // TODO: Add member count sync logic
-    if (team.memberCount < 4) {
-      selectedTeam = team;
-      break;
+
+    try {
+      const members = await fetchTeamMembers(team.accessToken, team.accountId);
+      const memberCount = Array.isArray(members) ? members.length : 0;
+      const refreshed = await DB.updateTeam(team.id, { memberCount, tokenStatus: "active" });
+
+      if (memberCount < 4 && !selectedTeam) {
+        selectedTeam = refreshed;
+      }
+    } catch (err) {
+      console.error("[Join] token expired or member fetch failed", err);
+      await DB.updateTeam(team.id, { tokenStatus: "expired" });
     }
   }
 
