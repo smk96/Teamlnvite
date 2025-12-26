@@ -80,33 +80,18 @@
         <!-- 邀请码管理 -->
         <div class="section">
             <h2>🔑 邀请码管理</h2>
-            <div style="margin-bottom: 20px;">
-                <form id="createKeyForm" onsubmit="createKeys(event)" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
-                    <div class="form-group" style="margin: 0;">
-                        <label>生成数量:</label>
-                        <input type="number" id="key_count" name="count" value="1" min="1" max="20" style="width: 100px;">
-                    </div>
-                    <div class="form-group" style="margin: 0;">
-                        <label>
-                            <input type="checkbox" id="key_is_temp">
-                            1日试用邀请码 (24小时后自动踢出)
-                        </label>
-                    </div>
-                    <div class="form-group" style="margin: 0;">
-                        <label>
-                            <input type="checkbox" id="key_is_unlimited">
-                            特殊邀请码（无限次邀请）
-                        </label>
-                    </div>
-                    <button type="submit" class="btn btn-primary">生成邀请码</button>
-                </form>
+            <div style="margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                <div class="form-group" style="margin: 0;">
+                    <label>生成数量:</label>
+                    <input type="number" id="key_count" name="count" value="1" min="1" max="20" style="width: 100px;">
+                </div>
+                <button type="button" class="btn btn-primary" onclick="createKeys(false)">生成一次性邀请码</button>
+                <button type="button" class="btn btn-primary" onclick="createKeys(true)" style="background:#20c997;">生成无限邀请码</button>
             </div>
             <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button onclick="toggleKeysList()" class="btn btn-primary" id="toggleKeysBtn">👁️ 查看邀请码</button>
-                <button onclick="copyAllNormalKeys()" class="btn btn-primary">📋 一键复制所有普通邀请码</button>
-                <button onclick="copyAllTempKeys()" class="btn btn-primary" style="background: #ff6b6b;">📋 一键复制所有1日试用码</button>
+                <button onclick="openNormalKeysModal()" class="btn btn-primary">👁️ 查看一次性邀请码</button>
+                <button onclick="openUnlimitedKeysModal()" class="btn btn-primary" style="background:#20c997;">👁️ 查看无限邀请码</button>
             </div>
-            <div id="keysList" style="display: none;"></div>
         </div>
 
         <!-- Auto-Kick 配置 -->
@@ -163,6 +148,32 @@
         </div>
     </div>
 
+    <div id="normalKeysModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔑 一次性邀请码</h2>
+                <span class="close" onclick="closeKeysModal()">&times;</span>
+            </div>
+            <div style="margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-primary btn-sm" onclick="copyKeys(false)">📋 复制全部</button>
+            </div>
+            <div id="normalKeysList">加载中...</div>
+        </div>
+    </div>
+
+    <div id="unlimitedKeysModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>♾️ 无限邀请码</h2>
+                <span class="close" onclick="closeKeysModal()">&times;</span>
+            </div>
+            <div style="margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-primary btn-sm" onclick="copyKeys(true)">📋 复制全部</button>
+            </div>
+            <div id="unlimitedKeysList">加载中...</div>
+        </div>
+    </div>
+
     <script>
         let allKeys = [];
         let teamsLoaded = false;
@@ -174,17 +185,24 @@
             loadAutoKickConfig();
         };
 
-        function toggleKeysList() {
-            const keysList = document.getElementById('keysList');
-            const toggleBtn = document.getElementById('toggleKeysBtn');
-            if (keysList.style.display === 'none') {
-                keysList.style.display = 'block';
-                toggleBtn.textContent = '👁️‍🗨️ 隐藏邀请码';
-                if (!keysLoaded) { loadKeys(); keysLoaded = true; }
+        async function openNormalKeysModal() {
+            await openKeysModal(false);
+        }
+
+        async function openUnlimitedKeysModal() {
+            await openKeysModal(true);
+        }
+
+        async function openKeysModal(isUnlimited) {
+            if (!keysLoaded) {
+                await loadKeys();
+                keysLoaded = true;
             } else {
-                keysList.style.display = 'none';
-                toggleBtn.textContent = '👁️ 查看邀请码';
+                renderKeysList(isUnlimited);
             }
+
+            const modalId = isUnlimited ? 'unlimitedKeysModal' : 'normalKeysModal';
+            document.getElementById(modalId).style.display = 'block';
         }
 
         function toggleTeamsList() {
@@ -231,36 +249,54 @@
                 const data = await response.json();
                 if (data.success) {
                     allKeys = data.keys;
-                    displayKeys(data.keys);
+                    refreshKeyModals();
                 }
             } catch (error) {
                 console.error('加载邀请码失败:', error);
             }
         }
 
-        function displayKeys(keys) {
-            const container = document.getElementById('keysList');
+        function refreshKeyModals() {
+            const normalModal = document.getElementById('normalKeysModal');
+            const unlimitedModal = document.getElementById('unlimitedKeysModal');
+
+            if (normalModal.style.display === 'block') {
+                renderKeysList(false);
+            }
+            if (unlimitedModal.style.display === 'block') {
+                renderKeysList(true);
+            }
+        }
+
+        function renderKeysList(isUnlimited) {
+            const container = document.getElementById(isUnlimited ? 'unlimitedKeysList' : 'normalKeysList');
+            const keys = allKeys.filter(k => !!k.isUnlimited === isUnlimited);
+
             if (!keys || keys.length === 0) {
                 container.innerHTML = '<p>暂无邀请码</p>';
                 return;
             }
+
             let html = '<div class="keys-list">';
             keys.forEach(key => {
-                const keyCode = key.code; // Adjusted for API mismatch if needed
+                const keyCode = key.code;
+                const usedBadge = isUnlimited
+                    ? `<span class="badge">使用 ${key.usageCount} 次</span>`
+                    : (key.usageCount > 0 ? '<span class="badge badge-error">已使用</span>' : '<span class="badge badge-success">未使用</span>');
+
                 html += `
                     <div class="key-item">
                         <div class="key-info">
                             <div>
                                 <code class="key-code">${keyCode}</code>
                                 <div style="margin-top: 8px;">
-                                    ${key.isTemp ? '<span class="badge badge-temp">1日试用</span>' : '<span class="badge">永久</span>'}
-                                    ${key.isUnlimited ? '<span class="badge" style="background:#20c997;">无限次</span>' : ''}
-                                    <span class="badge">使用 ${key.usageCount} 次</span>
+                                    ${isUnlimited ? '<span class="badge" style="background:#20c997;">无限</span>' : '<span class="badge">一次性</span>'}
+                                    ${usedBadge}
                                 </div>
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px;">
-                             <!-- Delete not impl yet -->
+                            ${isUnlimited ? `<button class="btn btn-danger btn-sm" onclick="deleteKey('${keyCode}')">删除</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -269,21 +305,18 @@
             container.innerHTML = html;
         }
 
-        async function createKeys(e) {
-            e.preventDefault();
+        async function createKeys(isUnlimited) {
             const count = parseInt(document.getElementById('key_count').value) || 1;
-            const isTemp = document.getElementById('key_is_temp').checked;
-            const isUnlimited = document.getElementById('key_is_unlimited').checked;
             try {
                 const response = await fetch('/api/admin/keys', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ count: count, is_temp: isTemp, is_unlimited: isUnlimited, temp_hours: isTemp ? 24 : 0 })
+                    body: JSON.stringify({ count: count, is_unlimited: !!isUnlimited })
                 });
                 const data = await response.json();
                 if (data.success) {
                     alert(`✅ 成功生成 ${count} 个邀请码！`);
-                    loadKeys();
+                    await loadKeys();
                 } else {
                     alert('错误: ' + data.error);
                 }
@@ -371,6 +404,11 @@
 
         function closeTeamModal() {
             document.getElementById('teamModal').style.display = 'none';
+        }
+
+        function closeKeysModal() {
+            document.getElementById('normalKeysModal').style.display = 'none';
+            document.getElementById('unlimitedKeysModal').style.display = 'none';
         }
 
         async function showTeamModal(teamId, teamName) {
@@ -513,14 +551,26 @@
             }
         }
         
-        // Key copy functions
-        function copyAllNormalKeys() {
-            const keys = allKeys.filter(k => !k.isTemp).map(k => k.code).join('\\n');
+        // Key actions
+        function copyKeys(isUnlimited) {
+            const keys = allKeys.filter(k => !!k.isUnlimited === isUnlimited).map(k => k.code).join('\\n');
             navigator.clipboard.writeText(keys).then(() => alert('已复制'));
         }
-        function copyAllTempKeys() {
-             const keys = allKeys.filter(k => k.isTemp).map(k => k.code).join('\\n');
-            navigator.clipboard.writeText(keys).then(() => alert('已复制'));
+
+        async function deleteKey(code) {
+            if (!confirm(`确定要删除无限邀请码 ${code} 吗？`)) return;
+            try {
+                const response = await fetch(`/api/admin/keys/${encodeURIComponent(code)}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                    alert('已删除');
+                    await loadKeys();
+                } else {
+                    alert('错误: ' + data.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
         }
     </script>
 </body>
