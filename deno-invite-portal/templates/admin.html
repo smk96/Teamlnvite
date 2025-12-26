@@ -92,6 +92,12 @@
                             1日试用邀请码 (24小时后自动踢出)
                         </label>
                     </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label>
+                            <input type="checkbox" id="key_is_unlimited">
+                            特殊邀请码（无限次邀请）
+                        </label>
+                    </div>
                     <button type="submit" class="btn btn-primary">生成邀请码</button>
                 </form>
             </div>
@@ -140,10 +146,29 @@
         </div>
     </div>
 
+    <div id="teamModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="teamModalTitle">👥 Team 成员</h2>
+                <span class="close" onclick="closeTeamModal()">&times;</span>
+            </div>
+            <div>
+                <h3>成员列表</h3>
+                <div id="membersList">加载中...</div>
+            </div>
+            <div style="margin-top: 30px;">
+                <h3>待接受邀请</h3>
+                <div id="pendingInvitesList">加载中...</div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let allKeys = [];
         let teamsLoaded = false;
         let keysLoaded = false;
+        let currentTeamId = null;
+        let currentTeamName = "";
 
         window.onload = function () {
             loadAutoKickConfig();
@@ -229,6 +254,7 @@
                                 <code class="key-code">${keyCode}</code>
                                 <div style="margin-top: 8px;">
                                     ${key.isTemp ? '<span class="badge badge-temp">1日试用</span>' : '<span class="badge">永久</span>'}
+                                    ${key.isUnlimited ? '<span class="badge" style="background:#20c997;">无限次</span>' : ''}
                                     <span class="badge">使用 ${key.usageCount} 次</span>
                                 </div>
                             </div>
@@ -247,11 +273,12 @@
             e.preventDefault();
             const count = parseInt(document.getElementById('key_count').value) || 1;
             const isTemp = document.getElementById('key_is_temp').checked;
+            const isUnlimited = document.getElementById('key_is_unlimited').checked;
             try {
                 const response = await fetch('/api/admin/keys', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ count: count, is_temp: isTemp, temp_hours: isTemp ? 24 : 0 })
+                    body: JSON.stringify({ count: count, is_temp: isTemp, is_unlimited: isUnlimited, temp_hours: isTemp ? 24 : 0 })
                 });
                 const data = await response.json();
                 if (data.success) {
@@ -315,13 +342,14 @@
                     <div class="team-card">
                         <div class="team-header">
                             <h3>${team.name}</h3>
-                            <span class="badge">${team.memberCount || 0}/4 人</span>
+                            <button type="button" class="badge" onclick="showTeamModal('${team.id}', '${team.name}')">${team.memberCount || 0}/4 人</button>
                         </div>
                         <div class="team-info">
                             <p><strong>Account ID:</strong> <code>${team.accountId}</code></p>
                             <p><strong>状态:</strong> ${team.tokenStatus}</p>
                         </div>
                         <div class="team-actions">
+                            <button onclick="showTeamModal('${team.id}', '${team.name}')" class="btn btn-primary btn-sm">👥 成员/邀请</button>
                             <button onclick="deleteTeam('${team.id}')" class="btn btn-danger btn-sm">🗑️ 删除</button>
                         </div>
                     </div>
@@ -339,6 +367,151 @@
                 if (data.success) { alert('Team 删除成功！'); loadTeams(); }
                 else alert('错误: ' + data.error);
             } catch (error) { alert('请求失败: ' + error.message); }
+        }
+
+        function closeTeamModal() {
+            document.getElementById('teamModal').style.display = 'none';
+        }
+
+        async function showTeamModal(teamId, teamName) {
+            currentTeamId = teamId;
+            currentTeamName = teamName;
+            document.getElementById('teamModalTitle').textContent = `👥 ${teamName} - 成员与邀请`;
+            document.getElementById('teamModal').style.display = 'block';
+            await loadMembers(teamId);
+            await loadPendingInvites(teamId);
+        }
+
+        async function loadMembers(teamId) {
+            const container = document.getElementById('membersList');
+            container.innerHTML = '加载中...';
+            try {
+                const response = await fetch(`/api/admin/teams/${teamId}/members`);
+                const data = await response.json();
+                if (data.success) {
+                    displayMembers(data.members || []);
+                } else {
+                    container.innerHTML = '加载失败: ' + data.error;
+                }
+            } catch (error) {
+                container.innerHTML = '加载失败: ' + error.message;
+            }
+        }
+
+        function displayMembers(members) {
+            const container = document.getElementById('membersList');
+            if (!members.length) {
+                container.innerHTML = '<p>暂无成员</p>';
+                return;
+            }
+
+            let html = '<div class="members-list">';
+            members.forEach(member => {
+                const isOwner = member.role === 'account-owner';
+                const joinedAt = member.created_at ? new Date(member.created_at).toLocaleString('zh-CN') : '-';
+                html += `
+                    <div class="member-item">
+                        <div class="member-info">
+                            <div>
+                                <strong>${member.email || member.name || 'Unknown'}</strong>
+                                <span class="badge ${isOwner ? 'badge-owner' : ''}">${isOwner ? '所有者' : '成员'}</span>
+                            </div>
+                            <div class="member-meta">
+                                <small>User ID: ${member.user_id || member.id || '-'}</small>
+                                <small>加入时间: ${joinedAt}</small>
+                            </div>
+                        </div>
+                        ${!isOwner ? `<button onclick="kickMember('${member.user_id || member.id}', '${member.email || ''}')" class="btn btn-danger btn-sm">🚫 踢出</button>` : ''}
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        async function kickMember(userId, email) {
+            if (!confirm(`确定要踢出 ${email || '该成员'} 吗？`)) return;
+            try {
+                const response = await fetch(`/api/admin/teams/${currentTeamId}/members/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email || '' })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('成员已踢出');
+                    await loadMembers(currentTeamId);
+                    await loadTeams();
+                } else {
+                    alert('错误: ' + data.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
+        }
+
+        async function loadPendingInvites(teamId) {
+            const container = document.getElementById('pendingInvitesList');
+            container.innerHTML = '加载中...';
+            try {
+                const response = await fetch(`/api/admin/teams/${teamId}/pending-invites`);
+                const data = await response.json();
+                if (data.success) {
+                    displayPendingInvites(data.invites || []);
+                } else {
+                    container.innerHTML = '加载失败: ' + data.error;
+                }
+            } catch (error) {
+                container.innerHTML = '加载失败: ' + error.message;
+            }
+        }
+
+        function displayPendingInvites(invites) {
+            const container = document.getElementById('pendingInvitesList');
+            if (!invites.length) {
+                container.innerHTML = '<p>暂无待接受邀请</p>';
+                return;
+            }
+
+            let html = '<div class="members-list">';
+            invites.forEach(inv => {
+                const invitedAt = inv.created_at ? new Date(inv.created_at).toLocaleString('zh-CN') : '-';
+                html += `
+                    <div class="member-item">
+                        <div class="member-info">
+                            <div>
+                                <strong>${inv.email_address || inv.email || 'Unknown'}</strong>
+                                <span class="badge">待接受</span>
+                            </div>
+                            <div class="member-meta">
+                                <small>邀请时间: ${invitedAt}</small>
+                                <small>Invite ID: ${inv.id || inv.invite_id || '-'}</small>
+                            </div>
+                        </div>
+                        <button onclick="revokeInvite('${inv.id || inv.invite_id}')" class="btn btn-danger btn-sm">撤销邀请</button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        async function revokeInvite(inviteId) {
+            if (!confirm('确定要撤销该邀请吗？')) return;
+            try {
+                const response = await fetch(`/api/admin/teams/${currentTeamId}/pending-invites/${inviteId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('邀请已撤销');
+                    await loadPendingInvites(currentTeamId);
+                } else {
+                    alert('错误: ' + data.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
         }
         
         // Key copy functions
