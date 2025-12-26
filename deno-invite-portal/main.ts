@@ -335,7 +335,7 @@ router.get("/api/admin/teams/:id/members", async (ctx) => {
         const invite = await DB.getLatestInvitationByEmail(team.id, email);
         return {
           ...member,
-          joined_at: invite?.createdAt || null
+          joined_at: invite?.createdAt || member?.created_at || null
         };
       })
     );
