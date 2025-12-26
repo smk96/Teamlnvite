@@ -324,7 +324,13 @@ router.get("/api/admin/teams/:id/members", async (ctx) => {
     const members = await fetchTeamMembers(team.accessToken, team.accountId);
     const enrichedMembers = await Promise.all(
       (members || []).map(async (member: any) => {
-        const email = String(member?.email || "").toLowerCase();
+        const rawEmail =
+          member?.email ||
+          member?.email_address ||
+          member?.user?.email ||
+          member?.user?.email_address ||
+          "";
+        const email = String(rawEmail).toLowerCase();
         if (!email) return member;
         const invite = await DB.getLatestInvitationByEmail(team.id, email);
         return {
