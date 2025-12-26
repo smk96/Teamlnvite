@@ -137,7 +137,7 @@ async function fetchPendingInvites(accessToken: string, accountId: string) {
 }
 
 async function revokeInvite(accessToken: string, accountId: string, inviteId: string) {
-  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/invites/${inviteId}`;
+  const baseUrl = `https://chatgpt.com/backend-api/accounts/${accountId}/invites/${inviteId}`;
   const headers = {
     "accept": "*/*",
     "authorization": `Bearer ${accessToken}`,
@@ -146,12 +146,34 @@ async function revokeInvite(accessToken: string, accountId: string, inviteId: st
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   };
 
-  const res = await fetch(url, { method: "DELETE", headers });
-  if (res.status !== 200 && res.status !== 204) {
-    const text = await res.text();
-    throw new Error(`Revoke invite failed: ${res.status} - ${text}`);
+  const attempts = [
+    { url: baseUrl, method: "DELETE" },
+    { url: `${baseUrl}/revoke`, method: "POST" },
+    { url: `${baseUrl}/cancel`, method: "POST" }
+  ];
+
+  let lastStatus = 0;
+  let lastText = "";
+  for (const attempt of attempts) {
+    const res = await fetch(attempt.url, {
+      method: attempt.method,
+      headers,
+      body: attempt.method === "POST" ? "{}" : undefined
+    });
+
+    if (res.status === 200 || res.status === 204) {
+      return true;
+    }
+
+    lastStatus = res.status;
+    lastText = await res.text();
+
+    if (res.status !== 405) {
+      break;
+    }
   }
-  return true;
+
+  throw new Error(`Revoke invite failed: ${lastStatus} - ${lastText}`);
 }
 
 async function kickMember(accessToken: string, accountId: string, userId: string) {
@@ -341,22 +363,27 @@ router.get("/api/admin/keys", async (ctx) => {
 });
 
 router.post("/api/admin/keys", async (ctx) => {
-  const { count, is_temp, temp_hours, is_unlimited } = await ctx.request.body.json();
-    const createdKeys: any[] = [];
-    
-    for (let i = 0; i < (count || 1); i++) {
+  const { count, is_unlimited } = await ctx.request.body.json();
+  const createdKeys: any[] = [];
+
+  for (let i = 0; i < (count || 1); i++) {
     // Generate random code
     const code = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
     const key = await DB.createAccessKey({
       code,
-      isTemp: !!is_temp,
-      isUnlimited: !!is_unlimited,
-      tempHours: temp_hours || 24
+      isTemp: false,
+      isUnlimited: !!is_unlimited
     });
     createdKeys.push({ key_code: key.code, ...key });
   }
-  
+
   ctx.response.body = { success: true, keys: createdKeys };
+});
+
+router.delete("/api/admin/keys/:code", async (ctx) => {
+  const code = ctx.params.code;
+  await DB.deleteAccessKey(code);
+  ctx.response.body = { success: true };
 });
 
 // 4. Join API
@@ -377,12 +404,9 @@ router.post("/api/join", async (ctx) => {
     return;
   }
 
-  // 2. Check if key is used (if we want single use)
-  // Logic: Original code implies keys can be used once? 
-  // "每个密钥只能使用一次" in user.html. 
-  // But DB has usage_count. Let's enforce single use if not bound to team?
-  // Let's assume standard behavior: Keys are single use.
-  if (!key.isUnlimited && key.usageCount > 0) {
+  // 2. Check if key is used (temp or unlimited keys can be reused)
+  // Temp keys and special unlimited keys should allow multiple uses until no available team.
+  if (!key.isUnlimited && !key.isTemp && key.usageCount > 0) {
     ctx.response.status = 400;
     ctx.response.body = { success: false, error: "Key already used" };
     return;
