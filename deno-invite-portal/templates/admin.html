@@ -1,575 +1,527 @@
-/// <reference lib="deno.unstable" />
+<!DOCTYPE html>
+<html lang="zh-CN">
 
-import { Application, Router, Context } from "@oak/oak";
-import { join, dirname, fromFileUrl } from "@std/path";
-import { DB, Team } from "./lib/db.ts";
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatGPT Team 管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); padding: 40px; }
+        h1 { color: #333; margin-bottom: 30px; font-size: 32px; text-align: center; }
+        h2 { color: #555; margin: 30px 0 20px 0; font-size: 24px; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+        .section { margin-bottom: 40px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #555; font-weight: 500; }
+        input[type="text"], input[type="email"], input[type="number"], textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: border-color 0.3s; }
+        input[type="text"]:focus, input[type="email"]:focus, input[type="number"]:focus, textarea:focus { outline: none; border-color: #667eea; }
+        input[type="checkbox"] { width: 18px; height: 18px; margin-right: 8px; cursor: pointer; }
+        textarea { min-height: 100px; resize: vertical; font-family: monospace; }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; display: inline-block; }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #5a6268; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-sm { padding: 8px 16px; font-size: 12px; }
+        .teams-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; margin-top: 20px; }
+        .team-card { border: 2px solid #e0e0e0; border-radius: 12px; padding: 20px; transition: all 0.3s; }
+        .team-card:hover { border-color: #667eea; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); }
+        .team-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .team-header h3 { color: #333; font-size: 18px; }
+        .team-info { margin-bottom: 15px; }
+        .team-info p { margin: 8px 0; color: #666; font-size: 14px; }
+        .team-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .badge { display: inline-block; padding: 4px 12px; background: #667eea; color: white; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .badge-owner { background: #ffc107; }
+        .badge-temp { background: #ff6b6b; }
+        .badge-success { background: #28a745; }
+        .badge-error { background: #dc3545; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+        .key-code { background: #fff3cd; color: #856404; padding: 4px 8px; font-weight: 600; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); }
+        .modal-content { background-color: white; margin: 5% auto; padding: 30px; border-radius: 12px; width: 90%; max-width: 800px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .close { color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: #000; }
+        .members-list, .keys-list { margin-top: 20px; }
+        .member-item, .key-item { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .member-info, .key-info { flex: 1; }
+        .member-meta, .key-meta { display: flex; gap: 15px; margin-top: 5px; }
+        .log-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .log-table th, .log-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e0e0e0; }
+        .log-table th { background: #f8f9fa; font-weight: 600; color: #333; }
+        .log-table tr:hover { background: #f8f9fa; }
+    </style>
+</head>
 
-const __dirname = dirname(fromFileUrl(import.meta.url));
+<body>
+    <div class="container">
+        <h1>🎯 ChatGPT Team 管理后台 (Deno Edition)</h1>
 
-const app = new Application();
-const router = new Router();
+        <!-- 添加 Team -->
+        <div class="section">
+            <h2>➕ 添加新 Team</h2>
+            <form id="addTeamForm" onsubmit="addTeam(event)">
+                <div class="form-group">
+                    <label>Team 名称:</label>
+                    <input type="text" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Session JSON (从浏览器复制):</label>
+                    <textarea name="session_data" required placeholder='{"user": {...}, "accessToken": "..."}' rows="6"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">添加 Team</button>
+            </form>
+        </div>
 
-// --- API Helpers ---
+        <!-- 邀请码管理 -->
+        <div class="section">
+            <h2>🔑 邀请码管理</h2>
+            <div style="margin-bottom: 20px;">
+                <form id="createKeyForm" onsubmit="createKeys(event)" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                    <div class="form-group" style="margin: 0;">
+                        <label>生成数量:</label>
+                        <input type="number" id="key_count" name="count" value="1" min="1" max="20" style="width: 100px;">
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label>
+                            <input type="checkbox" id="key_is_temp">
+                            1日试用邀请码 (24小时后自动踢出)
+                        </label>
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label>
+                            <input type="checkbox" id="key_is_unlimited">
+                            特殊邀请码（无限次邀请）
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">生成邀请码</button>
+                </form>
+            </div>
+            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button onclick="toggleKeysList()" class="btn btn-primary" id="toggleKeysBtn">👁️ 查看邀请码</button>
+                <button onclick="copyAllNormalKeys()" class="btn btn-primary">📋 一键复制所有普通邀请码</button>
+                <button onclick="copyAllTempKeys()" class="btn btn-primary" style="background: #ff6b6b;">📋 一键复制所有1日试用码</button>
+            </div>
+            <div id="keysList" style="display: none;"></div>
+        </div>
 
-// Middleware for error handling
-app.use(async (ctx, next) => {
-  try {
-    await next();
-  } catch (err) {
-    console.error(err);
-    ctx.response.status = 500;
-    ctx.response.body = { success: false, error: err instanceof Error ? err.message : "Internal Server Error" };
-  }
-});
+        <!-- Auto-Kick 配置 -->
+        <div class="section">
+            <h2>⚙️ Auto-Kick 配置</h2>
+            <form id="autoKickConfigForm" onsubmit="saveAutoKickConfig(event)">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="auto_kick_enabled" name="enabled">
+                        启用自动踢人
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>检测间隔 (秒):</label>
+                    <input type="number" id="check_interval" name="check_interval" value="300" min="60">
+                </div>
+                <div class="form-group">
+                    <label>运行时间段 (北京时间):</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="number" id="start_hour" name="start_hour" value="0" min="0" max="23" style="width: 80px;">
+                        <span>时 至</span>
+                        <input type="number" id="end_hour" name="end_hour" value="23" min="0" max="23" style="width: 80px;">
+                        <span>时</span>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">保存配置</button>
+            </form>
+        </div>
 
-// Middleware for Admin Auth
-app.use(async (ctx, next) => {
-  if (ctx.request.url.pathname.startsWith("/admin") || ctx.request.url.pathname.startsWith("/api/admin")) {
-    const adminPassword = Deno.env.get("ADMIN_PASSWORD");
-    if (adminPassword) {
-      const authHeader = ctx.request.headers.get("Authorization");
-      if (!authHeader) {
-        ctx.response.status = 401;
-        ctx.response.headers.set("WWW-Authenticate", 'Basic realm="Admin Area"');
-        return;
-      }
-      const [type, credentials] = authHeader.split(" ");
-      if (type !== "Basic") {
-         ctx.response.status = 401;
-         return;
-      }
-      const decoded = atob(credentials);
-      const [user, pass] = decoded.split(":");
-      // Username can be anything, check password
-      if (pass !== adminPassword) {
-         ctx.response.status = 403;
-         ctx.response.body = "Forbidden";
-         return;
-      }
-    }
-  }
-  await next();
-});
+        <!-- Teams 列表 -->
+        <div class="section">
+            <h2>📋 Teams 列表</h2>
+            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button onclick="toggleTeamsList()" class="btn btn-primary" id="toggleTeamsBtn">👁️ 查看Teams</button>
+            </div>
+            <div id="teamsList" style="display: none;"></div>
+        </div>
+    </div>
 
-// Middleware for static files
-app.use(async (ctx, next) => {
-  await next();
-  const root = join(__dirname, "static");
-  try {
-    await ctx.send({ root });
-  } catch {
-    // Ignore 404 for static files, let router handle it
-  }
-});
+    <div id="teamModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="teamModalTitle">👥 Team 成员</h2>
+                <span class="close" onclick="closeTeamModal()">&times;</span>
+            </div>
+            <div>
+                <h3>成员列表</h3>
+                <div id="membersList">加载中...</div>
+            </div>
+            <div style="margin-top: 30px;">
+                <h3>待接受邀请</h3>
+                <div id="pendingInvitesList">加载中...</div>
+            </div>
+        </div>
+    </div>
 
+    <script>
+        let allKeys = [];
+        let teamsLoaded = false;
+        let keysLoaded = false;
+        let currentTeamId = null;
+        let currentTeamName = "";
 
-// --- Business Logic Services ---
-
-async function fetchTeamMembers(accessToken: string, accountId: string) {
-  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/users`;
-  const headers = {
-    "accept": "*/*",
-    "accept-language": "zh-CN,zh;q=0.9",
-    "authorization": `Bearer ${accessToken}`,
-    "chatgpt-account-id": accountId,
-    "content-type": "application/json",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-  };
-
-  try {
-    const res = await fetch(url, { headers });
-    if (res.status === 401) throw new Error("Token expired");
-    if (res.status !== 200) throw new Error(`API Error: ${res.status}`);
-    const data = await res.json();
-    return data.items || [];
-  } catch (e) {
-    console.error("Fetch members error:", e);
-    throw e;
-  }
-}
-
-async function inviteToTeam(accessToken: string, accountId: string, email: string) {
-  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/invites`;
-  const headers = {
-    "accept": "*/*",
-    "authorization": `Bearer ${accessToken}`,
-    "chatgpt-account-id": accountId,
-    "content-type": "application/json",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-  };
-  
-  const body = {
-    email_addresses: [email],
-    role: "standard-user",
-    resend_emails: false
-  };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body)
-  });
-
-  if (res.status !== 200 && res.status !== 201) {
-    const text = await res.text();
-    throw new Error(`Invite failed: ${res.status} - ${text}`);
-  }
-  return await res.json();
-}
-
-async function fetchPendingInvites(accessToken: string, accountId: string) {
-  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/invites`;
-  const headers = {
-    "accept": "*/*",
-    "authorization": `Bearer ${accessToken}`,
-    "chatgpt-account-id": accountId,
-    "content-type": "application/json",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-  };
-
-  const res = await fetch(url, { headers });
-  if (res.status !== 200) {
-    const text = await res.text();
-    throw new Error(`Fetch invites failed: ${res.status} - ${text}`);
-  }
-  const data = await res.json();
-  return data.items || [];
-}
-
-async function revokeInvite(accessToken: string, accountId: string, inviteId: string) {
-  const baseUrl = `https://chatgpt.com/backend-api/accounts/${accountId}/invites/${inviteId}`;
-  const headers = {
-    "accept": "*/*",
-    "authorization": `Bearer ${accessToken}`,
-    "chatgpt-account-id": accountId,
-    "content-type": "application/json",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-  };
-
-  const attempts = [
-    { url: baseUrl, method: "DELETE" },
-    { url: `${baseUrl}/revoke`, method: "POST" },
-    { url: `${baseUrl}/cancel`, method: "POST" }
-  ];
-
-  let lastStatus = 0;
-  let lastText = "";
-  for (const attempt of attempts) {
-    const res = await fetch(attempt.url, {
-      method: attempt.method,
-      headers,
-      body: attempt.method === "POST" ? "{}" : undefined
-    });
-
-    if (res.status === 200 || res.status === 204) {
-      return true;
-    }
-
-    lastStatus = res.status;
-    lastText = await res.text();
-
-    if (res.status !== 405) {
-      break;
-    }
-  }
-
-  throw new Error(`Revoke invite failed: ${lastStatus} - ${lastText}`);
-}
-
-async function kickMember(accessToken: string, accountId: string, userId: string) {
-  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/users/${userId}`;
-  const headers = {
-    "accept": "*/*",
-    "authorization": `Bearer ${accessToken}`,
-    "chatgpt-account-id": accountId,
-    "content-type": "application/json",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-  };
-
-  const res = await fetch(url, { method: "DELETE", headers });
-  if (res.status !== 200 && res.status !== 204) {
-    const text = await res.text();
-    throw new Error(`Kick failed: ${res.status} - ${text}`);
-  }
-  return true;
-}
-
-// --- Routes ---
-
-// 1. Pages
-router.get("/", async (ctx) => {
-  const html = await Deno.readTextFile(join(__dirname, "templates", "index.html"));
-  ctx.response.body = html;
-});
-
-router.get("/admin", async (ctx) => {
-  // Simple auth check (TODO: Real auth)
-  const html = await Deno.readTextFile(join(__dirname, "templates", "admin.html"));
-  ctx.response.body = html;
-});
-
-// 2. Admin API - Teams
-router.get("/api/admin/teams", async (ctx) => {
-  const teams = await DB.listTeams();
-  ctx.response.body = { success: true, teams };
-});
-
-router.post("/api/admin/teams", async (ctx) => {
-  const body = await ctx.request.body.json();
-  const { name, session_data } = body;
-  
-  try {
-    const session = JSON.parse(session_data);
-    
-    // Validate Session JSON
-    // We prioritize checking for an explicit 'accountId' field,
-    // because 'user.id' is often 'user-xxx' which is NOT a UUID and fails the API check.
-    if (!session.accessToken) {
-        ctx.response.status = 400;
-        ctx.response.body = { success: false, error: "Invalid Session JSON: Missing accessToken" };
-        return;
-    }
-
-    const accessToken = session.accessToken;
-    // Prefer account.id (original Flask), then accountId, then user.id (may be user-xxx and invalid)
-    const accountId = session.account?.id || session.accountId || session.user?.id;
-    
-    if (!accountId) {
-       ctx.response.status = 400;
-       ctx.response.body = { success: false, error: "Invalid Session JSON: Missing account.id, accountId or user.id" };
-       return;
-    }
-
-    await DB.createTeam({
-      name,
-      accountId,
-      accessToken,
-      email: session.user?.email // Use optional chaining
-    });
-    ctx.response.body = { success: true };
-  } catch (e) {
-    ctx.response.status = 400;
-    ctx.response.body = { success: false, error: "Invalid session data or team creation failed" };
-  }
-});
-
-router.put("/api/admin/teams/:id/token", async (ctx) => {
-  const id = ctx.params.id;
-  const body = await ctx.request.body.json();
-  const { session_data } = body;
-  try {
-    const session = JSON.parse(session_data);
-    await DB.updateTeam(id, {
-      accessToken: session.accessToken,
-      tokenStatus: "active",
-      tokenErrorCount: 0
-    });
-    ctx.response.body = { success: true };
-  } catch (e) {
-    ctx.response.body = { success: false, error: "Update failed" };
-  }
-});
-
-router.delete("/api/admin/teams/:id", async (ctx) => {
-  await DB.deleteTeam(ctx.params.id);
-  ctx.response.body = { success: true };
-});
-
-router.get("/api/admin/teams/:id/members", async (ctx) => {
-  const team = await DB.getTeam(ctx.params.id);
-  if (!team) {
-    ctx.response.status = 404;
-    ctx.response.body = { success: false, error: "Team not found" };
-    return;
-  }
-
-  try {
-    const members = await fetchTeamMembers(team.accessToken, team.accountId);
-    ctx.response.body = { success: true, members };
-  } catch (e) {
-    ctx.response.status = 500;
-    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Failed to fetch members" };
-  }
-});
-
-router.delete("/api/admin/teams/:id/members/:userId", async (ctx) => {
-  const team = await DB.getTeam(ctx.params.id);
-  if (!team) {
-    ctx.response.status = 404;
-    ctx.response.body = { success: false, error: "Team not found" };
-    return;
-  }
-
-  let email = "";
-  try {
-    if (ctx.request.hasBody) {
-      const body = await ctx.request.body.json();
-      email = body?.email || "";
-    }
-  } catch {
-    // ignore body parse errors
-  }
-
-  try {
-    await kickMember(team.accessToken, team.accountId, ctx.params.userId);
-    if (email) {
-      await DB.deleteInvitationsByEmail(team.id, email);
-    }
-    ctx.response.body = { success: true };
-  } catch (e) {
-    ctx.response.status = 500;
-    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Kick failed" };
-  }
-});
-
-router.get("/api/admin/teams/:id/pending-invites", async (ctx) => {
-  const team = await DB.getTeam(ctx.params.id);
-  if (!team) {
-    ctx.response.status = 404;
-    ctx.response.body = { success: false, error: "Team not found" };
-    return;
-  }
-
-  try {
-    const invites = await fetchPendingInvites(team.accessToken, team.accountId);
-    ctx.response.body = { success: true, invites };
-  } catch (e) {
-    ctx.response.status = 500;
-    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Failed to fetch invites" };
-  }
-});
-
-router.delete("/api/admin/teams/:id/pending-invites/:inviteId", async (ctx) => {
-  const team = await DB.getTeam(ctx.params.id);
-  if (!team) {
-    ctx.response.status = 404;
-    ctx.response.body = { success: false, error: "Team not found" };
-    return;
-  }
-
-  try {
-    await revokeInvite(team.accessToken, team.accountId, ctx.params.inviteId);
-    ctx.response.body = { success: true };
-  } catch (e) {
-    ctx.response.status = 500;
-    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Revoke failed" };
-  }
-});
-
-// 3. Admin API - Keys
-router.get("/api/admin/keys", async (ctx) => {
-  const keys = await DB.listAccessKeys();
-  ctx.response.body = { success: true, keys };
-});
-
-router.post("/api/admin/keys", async (ctx) => {
-  const { count, is_temp, temp_hours, is_unlimited } = await ctx.request.body.json();
-    const createdKeys: any[] = [];
-    
-    for (let i = 0; i < (count || 1); i++) {
-    // Generate random code
-    const code = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
-    const key = await DB.createAccessKey({
-      code,
-      isTemp: !!is_temp,
-      isUnlimited: !!is_unlimited,
-      tempHours: temp_hours || 24
-    });
-    createdKeys.push({ key_code: key.code, ...key });
-  }
-  
-  ctx.response.body = { success: true, keys: createdKeys };
-});
-
-// 4. Join API
-router.post("/api/join", async (ctx) => {
-  const { email, key_code } = await ctx.request.body.json();
-  
-  if (!email || !key_code) {
-    ctx.response.status = 400;
-    ctx.response.body = { success: false, error: "Missing fields" };
-    return;
-  }
-
-  // 1. Validate Key
-  const key = await DB.getAccessKey(key_code);
-  if (!key) {
-    ctx.response.status = 400;
-    ctx.response.body = { success: false, error: "Invalid Key" };
-    return;
-  }
-
-  // 2. Check if key is used (temp or unlimited keys can be reused)
-  // Temp keys and special unlimited keys should allow multiple uses until no available team.
-  if (!key.isUnlimited && !key.isTemp && key.usageCount > 0) {
-    ctx.response.status = 400;
-    ctx.response.body = { success: false, error: "Key already used" };
-    return;
-  }
-
-  // 3. Find Available Team (actively refresh member count + token status)
-  const teams = await DB.listTeams();
-  let selectedTeam: Team | null = null;
-  const normalizedEmail = email.toLowerCase();
-
-  for (const team of teams) {
-    if (team.tokenStatus === "expired") continue;
-
-    try {
-      const members = await fetchTeamMembers(team.accessToken, team.accountId);
-      const nonOwnerMembers = Array.isArray(members)
-        ? members.filter((m: any) => m?.role !== "account-owner")
-        : [];
-      const memberCount = nonOwnerMembers.length;
-      const refreshed = await DB.updateTeam(team.id, { memberCount, tokenStatus: "active" });
-
-      const memberEmails = nonOwnerMembers
-        .map((m: any) => String(m?.email || "").toLowerCase())
-        .filter(Boolean);
-
-      if (memberEmails.includes(normalizedEmail)) {
-        const tempExpireAt = key.isTemp
-          ? Date.now() + (key.tempHours || 24) * 3600000
-          : undefined;
-
-        await DB.createInvitation({
-          teamId: refreshed.id,
-          email,
-          keyCode: key_code,
-          status: "success",
-          isTemp: key.isTemp,
-          tempExpireAt,
-          isConfirmed: false
-        });
-
-        await DB.incrementKeyUsage(key_code);
-
-        ctx.response.body = {
-          success: true,
-          message: `✅ 您已是 ${refreshed.name} 团队成员！`,
-          team_name: refreshed.name,
-          email
+        window.onload = function () {
+            loadAutoKickConfig();
         };
-        return;
-      }
 
-      if (memberCount < 4 && !selectedTeam) {
-        selectedTeam = refreshed;
-      }
-    } catch (err) {
-      console.error("[Join] token expired or member fetch failed", err);
-      await DB.updateTeam(team.id, { tokenStatus: "expired" });
-    }
-  }
+        function toggleKeysList() {
+            const keysList = document.getElementById('keysList');
+            const toggleBtn = document.getElementById('toggleKeysBtn');
+            if (keysList.style.display === 'none') {
+                keysList.style.display = 'block';
+                toggleBtn.textContent = '👁️‍🗨️ 隐藏邀请码';
+                if (!keysLoaded) { loadKeys(); keysLoaded = true; }
+            } else {
+                keysList.style.display = 'none';
+                toggleBtn.textContent = '👁️ 查看邀请码';
+            }
+        }
 
-  if (!selectedTeam) {
-    ctx.response.status = 400;
-    ctx.response.body = { success: false, error: "No available teams at the moment" };
-    return;
-  }
+        function toggleTeamsList() {
+            const teamsList = document.getElementById('teamsList');
+            const toggleBtn = document.getElementById('toggleTeamsBtn');
+            if (teamsList.style.display === 'none') {
+                teamsList.style.display = 'block';
+                toggleBtn.textContent = '👁️‍🗨️ 隐藏Teams';
+                if (!teamsLoaded) { loadTeams(); teamsLoaded = true; }
+            } else {
+                teamsList.style.display = 'none';
+                toggleBtn.textContent = '👁️ 查看Teams';
+            }
+        }
 
-  // 4. Invite
-  try {
-    await inviteToTeam(selectedTeam.accessToken, selectedTeam.accountId, email);
-    
-    // 5. Update DB
-    await DB.createInvitation({
-      teamId: selectedTeam.id,
-      email,
-      keyCode: key_code,
-      status: "success",
-      isTemp: key.isTemp,
-      tempExpireAt: key.isTemp ? Date.now() + (key.tempHours || 24) * 3600000 : undefined,
-      isConfirmed: false
-    });
-    
-    await DB.incrementKeyUsage(key_code);
-    
-    // Update team member count (cached)
-    await DB.updateTeam(selectedTeam.id, { 
-      memberCount: selectedTeam.memberCount + 1,
-      lastInviteAt: Date.now()
-    });
+        async function addTeam(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            try {
+                const response = await fetch('/api/admin/teams', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: formData.get('name'),
+                        session_data: formData.get('session_data')
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Team 添加成功！');
+                    e.target.reset();
+                    loadTeams();
+                } else {
+                    alert('错误: ' + data.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
+        }
 
-    ctx.response.body = { success: true, message: "Invitation sent! Check your email." };
-  } catch (e) {
-    // Handle specific errors (e.g. token expired during invite)
-    console.error(e);
-    if (e.message.includes("401") || e.message.includes("expired")) {
-       await DB.updateTeam(selectedTeam.id, { tokenStatus: "expired" });
-    }
-    ctx.response.status = 500;
-    // Expose the error message to help debug (e.g., 401, 404 from upstream)
-    ctx.response.body = { success: false, error: `Invite failed: ${e.message}` };
-  }
-});
+        async function loadKeys() {
+            try {
+                const response = await fetch('/api/admin/keys');
+                const data = await response.json();
+                if (data.success) {
+                    allKeys = data.keys;
+                    displayKeys(data.keys);
+                }
+            } catch (error) {
+                console.error('加载邀请码失败:', error);
+            }
+        }
 
-// 5. Auto Kick Config
-router.get("/api/admin/auto-kick/config", async (ctx) => {
-  const config = await DB.getAutoKickConfig();
-  ctx.response.body = { success: true, config: {
-    enabled: config.enabled,
-    check_interval: config.checkInterval,
-    start_hour: config.startHour,
-    end_hour: config.endHour
-  }};
-});
+        function displayKeys(keys) {
+            const container = document.getElementById('keysList');
+            if (!keys || keys.length === 0) {
+                container.innerHTML = '<p>暂无邀请码</p>';
+                return;
+            }
+            let html = '<div class="keys-list">';
+            keys.forEach(key => {
+                const keyCode = key.code; // Adjusted for API mismatch if needed
+                html += `
+                    <div class="key-item">
+                        <div class="key-info">
+                            <div>
+                                <code class="key-code">${keyCode}</code>
+                                <div style="margin-top: 8px;">
+                                    ${key.isTemp ? '<span class="badge badge-temp">1日试用</span>' : '<span class="badge">永久</span>'}
+                                    ${key.isUnlimited ? '<span class="badge" style="background:#20c997;">无限次</span>' : ''}
+                                    <span class="badge">使用 ${key.usageCount} 次</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                             <!-- Delete not impl yet -->
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
 
-router.post("/api/admin/auto-kick/config", async (ctx) => {
-  const body = await ctx.request.body.json();
-  await DB.setAutoKickConfig({
-    enabled: body.enabled,
-    checkInterval: body.check_interval,
-    startHour: body.start_hour,
-    endHour: body.end_hour
-  });
-  ctx.response.body = { success: true };
-});
+        async function createKeys(e) {
+            e.preventDefault();
+            const count = parseInt(document.getElementById('key_count').value) || 1;
+            const isTemp = document.getElementById('key_is_temp').checked;
+            const isUnlimited = document.getElementById('key_is_unlimited').checked;
+            try {
+                const response = await fetch('/api/admin/keys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ count: count, is_temp: isTemp, is_unlimited: isUnlimited, temp_hours: isTemp ? 24 : 0 })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ 成功生成 ${count} 个邀请码！`);
+                    loadKeys();
+                } else {
+                    alert('错误: ' + data.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
+        }
 
-// --- Auto Kick Job (Deno Cron) ---
+        async function loadAutoKickConfig() {
+            try {
+                const response = await fetch('/api/admin/auto-kick/config');
+                const data = await response.json();
+                if (data.success && data.config) {
+                    document.getElementById('auto_kick_enabled').checked = data.config.enabled;
+                    document.getElementById('check_interval').value = data.config.check_interval;
+                    document.getElementById('start_hour').value = data.config.start_hour;
+                    document.getElementById('end_hour').value = data.config.end_hour;
+                }
+            } catch (error) { console.error('加载配置失败:', error); }
+        }
 
-Deno.cron("Auto Kick Service", "*/5 * * * *", async () => {
-  // Check config
-  const config = await DB.getAutoKickConfig();
-  if (!config.enabled) return;
-  
-  const now = new Date();
-  const currentHour = now.getHours(); // Local time depends on server
-  // Adjust for timezone if needed, assuming server time for now
-  
-  if (currentHour < config.startHour || currentHour > config.endHour) return;
+        async function saveAutoKickConfig(e) {
+            e.preventDefault();
+            const config = {
+                enabled: document.getElementById('auto_kick_enabled').checked,
+                check_interval: parseInt(document.getElementById('check_interval').value),
+                start_hour: parseInt(document.getElementById('start_hour').value),
+                end_hour: parseInt(document.getElementById('end_hour').value)
+            };
+            try {
+                const response = await fetch('/api/admin/auto-kick/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await response.json();
+                if (data.success) alert('配置保存成功！');
+                else alert('错误: ' + data.error);
+            } catch (error) { alert('请求失败: ' + error.message); }
+        }
 
-  console.log("[AutoKick] Starting check...");
-  
-  // 1. Check Temp Invites Expiration
-  const invites = await DB.listInvitations();
-  for (const inv of invites) {
-    if (inv.isTemp && !inv.isConfirmed && inv.tempExpireAt && Date.now() > inv.tempExpireAt && inv.status === 'success') {
-      // Expired! Kick user.
-      console.log(`[AutoKick] Expired invite: ${inv.email}`);
-      const team = await DB.getTeam(inv.teamId);
-      if (team) {
-         try {
-           const members = await fetchTeamMembers(team.accessToken, team.accountId);
-           const member = members.find((m: any) => m.email === inv.email);
-           if (member) {
-             // DELETE /users/{id}
-             // Implementation omitted for brevity, similar to invite
-             // Log kick
-           }
-         } catch (e) {
-           console.error(`[AutoKick] Failed to kick ${inv.email}`, e);
-         }
-      }
-    }
-  }
+        async function loadTeams() {
+            try {
+                const response = await fetch('/api/admin/teams');
+                const data = await response.json();
+                if (data.success) displayTeams(data.teams);
+            } catch (error) { console.error('加载 Teams 失败:', error); }
+        }
 
-  // 2. Full Sync (Check illegal members)
-  // ... (Implementation complexity omitted for this step, needs full logic)
-});
+        function displayTeams(teams) {
+            const container = document.getElementById('teamsList');
+            if (teams.length === 0) { container.innerHTML = '<p>暂无 Team</p>'; return; }
+            let html = '<div class="teams-grid">';
+            teams.forEach(team => {
+                html += `
+                    <div class="team-card">
+                        <div class="team-header">
+                            <h3>${team.name}</h3>
+                            <button type="button" class="badge" onclick="showTeamModal('${team.id}', '${team.name}')">${team.memberCount || 0}/4 人</button>
+                        </div>
+                        <div class="team-info">
+                            <p><strong>Account ID:</strong> <code>${team.accountId}</code></p>
+                            <p><strong>状态:</strong> ${team.tokenStatus}</p>
+                        </div>
+                        <div class="team-actions">
+                            <button onclick="showTeamModal('${team.id}', '${team.name}')" class="btn btn-primary btn-sm">👥 成员/邀请</button>
+                            <button onclick="deleteTeam('${team.id}')" class="btn btn-danger btn-sm">🗑️ 删除</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
 
-app.use(router.routes());
-app.use(router.allowedMethods());
+        async function deleteTeam(teamId) {
+            if (!confirm(`确定要删除吗？`)) return;
+            try {
+                const response = await fetch(`/api/admin/teams/${teamId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) { alert('Team 删除成功！'); loadTeams(); }
+                else alert('错误: ' + data.error);
+            } catch (error) { alert('请求失败: ' + error.message); }
+        }
 
-console.log("Server running on http://localhost:8000");
-await app.listen({ port: 8000 });
+        function closeTeamModal() {
+            document.getElementById('teamModal').style.display = 'none';
+        }
+
+        async function showTeamModal(teamId, teamName) {
+            currentTeamId = teamId;
+            currentTeamName = teamName;
+            document.getElementById('teamModalTitle').textContent = `👥 ${teamName} - 成员与邀请`;
+            document.getElementById('teamModal').style.display = 'block';
+            await loadMembers(teamId);
+            await loadPendingInvites(teamId);
+        }
+
+        async function loadMembers(teamId) {
+            const container = document.getElementById('membersList');
+            container.innerHTML = '加载中...';
+            try {
+                const response = await fetch(`/api/admin/teams/${teamId}/members`);
+                const data = await response.json();
+                if (data.success) {
+                    displayMembers(data.members || []);
+                } else {
+                    container.innerHTML = '加载失败: ' + data.error;
+                }
+            } catch (error) {
+                container.innerHTML = '加载失败: ' + error.message;
+            }
+        }
+
+        function displayMembers(members) {
+            const container = document.getElementById('membersList');
+            if (!members.length) {
+                container.innerHTML = '<p>暂无成员</p>';
+                return;
+            }
+
+            let html = '<div class="members-list">';
+            members.forEach(member => {
+                const isOwner = member.role === 'account-owner';
+                const joinedAt = member.created_at ? new Date(member.created_at).toLocaleString('zh-CN') : '-';
+                html += `
+                    <div class="member-item">
+                        <div class="member-info">
+                            <div>
+                                <strong>${member.email || member.name || 'Unknown'}</strong>
+                                <span class="badge ${isOwner ? 'badge-owner' : ''}">${isOwner ? '所有者' : '成员'}</span>
+                            </div>
+                            <div class="member-meta">
+                                <small>加入时间: ${joinedAt}</small>
+                            </div>
+                        </div>
+                        ${!isOwner ? `<button onclick="kickMember('${member.user_id || member.id}', '${member.email || ''}')" class="btn btn-danger btn-sm">🚫 踢出</button>` : ''}
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        async function kickMember(userId, email) {
+            if (!confirm(`确定要踢出 ${email || '该成员'} 吗？`)) return;
+            try {
+                const response = await fetch(`/api/admin/teams/${currentTeamId}/members/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email || '' })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('成员已踢出');
+                    await loadMembers(currentTeamId);
+                    await loadTeams();
+                } else {
+                    alert('错误: ' + data.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
+        }
+
+        async function loadPendingInvites(teamId) {
+            const container = document.getElementById('pendingInvitesList');
+            container.innerHTML = '加载中...';
+            try {
+                const response = await fetch(`/api/admin/teams/${teamId}/pending-invites`);
+                const data = await response.json();
+                if (data.success) {
+                    displayPendingInvites(data.invites || []);
+                } else {
+                    container.innerHTML = '加载失败: ' + data.error;
+                }
+            } catch (error) {
+                container.innerHTML = '加载失败: ' + error.message;
+            }
+        }
+
+        function displayPendingInvites(invites) {
+            const container = document.getElementById('pendingInvitesList');
+            if (!invites.length) {
+                container.innerHTML = '<p>暂无待接受邀请</p>';
+                return;
+            }
+
+            let html = '<div class="members-list">';
+            invites.forEach(inv => {
+                const invitedAt = inv.created_at ? new Date(inv.created_at).toLocaleString('zh-CN') : '-';
+                html += `
+                    <div class="member-item">
+                        <div class="member-info">
+                            <div>
+                                <strong>${inv.email_address || inv.email || 'Unknown'}</strong>
+                                <span class="badge">待接受</span>
+                            </div>
+                            <div class="member-meta">
+                                <small>邀请时间: ${invitedAt}</small>
+                                <small>Invite ID: ${inv.id || inv.invite_id || '-'}</small>
+                            </div>
+                        </div>
+                        <button onclick="revokeInvite('${inv.id || inv.invite_id}')" class="btn btn-danger btn-sm">撤销邀请</button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        async function revokeInvite(inviteId) {
+            if (!confirm('确定要撤销该邀请吗？')) return;
+            try {
+                const response = await fetch(`/api/admin/teams/${currentTeamId}/pending-invites/${inviteId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('邀请已撤销');
+                    await loadPendingInvites(currentTeamId);
+                } else {
+                    alert('错误: ' + data.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
+        }
+        
+        // Key copy functions
+        function copyAllNormalKeys() {
+            const keys = allKeys.filter(k => !k.isTemp).map(k => k.code).join('\\n');
+            navigator.clipboard.writeText(keys).then(() => alert('已复制'));
+        }
+        function copyAllTempKeys() {
+             const keys = allKeys.filter(k => k.isTemp).map(k => k.code).join('\\n');
+            navigator.clipboard.writeText(keys).then(() => alert('已复制'));
+        }
+    </script>
+</body>
+</html>
