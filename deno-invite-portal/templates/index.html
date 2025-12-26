@@ -5,33 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>加入 ChatGPT Team</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
+    <div class="bg-decoration"></div>
     <div class="container">
-        <div class="card">
-            <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">🎄 加入 ChatGPT Team 🎅</h1>
-            <p class="subtitle" style="font-size: 1.2rem;">输入您的邮箱和访问密钥即可加入团队</p>
+        <div class="card fade-in">
+            <div class="card-header">
+                <div class="logo-icon">
+                    <i class="fa-brands fa-openai"></i>
+                </div>
+                <h1>ChatGPT Team</h1>
+                <p class="subtitle">使用邀请码加入团队</p>
+            </div>
             
             <form id="joinForm">
                 <div class="form-group">
-                    <label for="email">📧 邮箱地址</label>
-                    <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                    <label for="email">邮箱地址</label>
+                    <div class="input-wrapper">
+                        <i class="fa-regular fa-envelope input-icon"></i>
+                        <input type="email" id="email" name="email" placeholder="name@example.com" required>
+                    </div>
                 </div>
                 
                 <div class="form-group">
-                    <label for="key_code">🔑 邀请码</label>
-                    <input type="text" id="key_code" name="key_code" placeholder="输入您获得的访问密钥" required>
+                    <label for="key_code">邀请码</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-key input-icon"></i>
+                        <input type="text" id="key_code" name="key_code" placeholder="输入您的访问密钥" required>
+                    </div>
                 </div>
                 
-                <button type="submit" class="btn btn-primary">加入团队</button>
+                <button type="submit" class="btn btn-primary">
+                    <span>立即加入</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
             </form>
             
             <div id="message" class="message" style="display: none;"></div>
+
+            <div class="card-footer">
+                <p><i class="fa-solid fa-circle-info"></i> 每个邀请码仅限使用一次</p>
+            </div>
         </div>
         
-        <div class="footer" style="text-align: center; margin-top: 2rem;">
-            <p style="font-size: 1rem;">💡 提示：，每个码只能使用一次</p>
-            <p style="font-size: 1.5rem; margin-top: 1rem;">❄️ Merry Christmas! ❄️</p>
+        <div class="page-footer">
+            <p>Powered by Deno & ChatGPT</p>
         </div>
     </div>
 
@@ -50,16 +70,17 @@
                 return;
             }
 
-            // 确认邮箱是否正确
-            const confirmMessage = `📧 请确认您的邮箱地址是否正确：\n\n${email}\n\n⚠️ 邀请邮件将发送到此邮箱，请仔细核对！\n如果邮箱错误，请点击"取消"重新输入。`;
+            // 确认邮箱
+            const confirmMessage = `📧 请确认您的邮箱地址：\n\n${email}\n\n⚠️ 邀请邮件将发送到此邮箱，请仔细核对！`;
             if (!confirm(confirmMessage)) {
                 return;
             }
 
-            // 禁用按钮
+            // 禁用按钮状态
             const submitBtn = form.querySelector('button[type="submit"]');
+            const originalBtnContent = submitBtn.innerHTML;
             submitBtn.disabled = true;
-            submitBtn.textContent = '处理中...';
+            submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> 处理中...';
             
             try {
                 const response = await fetch('/api/join', {
@@ -76,12 +97,11 @@
                     showMessage(data.message, 'success');
                     form.reset();
                     
-                    // 显示额外提示
                     setTimeout(() => {
-                        if (confirm('✅ 邀请已发送！\n\n是否打开邮箱查看邀请？')) {
+                        if (confirm('✅ 邀请已发送！\n\n是否立即前往 Gmail 查看？')) {
                             window.open('https://mail.google.com', '_blank');
                         }
-                    }, 1000);
+                    }, 800);
                 } else {
                     showMessage(data.error || '加入失败', 'error');
                 }
@@ -89,23 +109,22 @@
                 showMessage('网络错误，请稍后重试', 'error');
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.textContent = '加入团队';
+                submitBtn.innerHTML = originalBtnContent;
             }
         });
         
         function showMessage(text, type) {
-            messageDiv.innerHTML = text.replace(/\n/g, '<br>');
-            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = type === 'success' 
+                ? `<i class="fa-solid fa-circle-check"></i> ${text}`
+                : `<i class="fa-solid fa-circle-exclamation"></i> ${text}`;
+            
+            messageDiv.className = `message ${type} slide-in`;
             messageDiv.style.display = 'block';
             
             if (type === 'success') {
                 setTimeout(() => {
                     messageDiv.style.display = 'none';
                 }, 10000);
-            } else {
-                setTimeout(() => {
-                    messageDiv.style.display = 'none';
-                }, 5000);
             }
         }
     </script>
