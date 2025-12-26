@@ -188,6 +188,15 @@ export const DB = {
     return res.value;
   },
 
+  async getLatestInvitationByEmail(teamId: string, email: string) {
+    const normalized = email.toLowerCase();
+    const invites = await this.listInvitations();
+    const matches = invites
+      .filter((inv) => inv.teamId === teamId && inv.email.toLowerCase() === normalized)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    return matches[0];
+  },
+
   async updateInvitation(id: string, updates: Partial<Invitation>) {
     const inv = await this.getInvitation(id);
     if (!inv) throw new Error("Invitation not found");
