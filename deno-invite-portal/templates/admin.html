@@ -175,6 +175,20 @@
         </div>
     </div>
 
+    <div id="checkoutModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔗 付款链接</h2>
+                <span class="close" onclick="closeCheckoutModal()">&times;</span>
+            </div>
+            <div class="form-group">
+                <label>付款链接:</label>
+                <input type="text" id="checkoutLinkInput" readonly>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="copyCheckoutLink()">📋 复制链接</button>
+        </div>
+    </div>
+
     <script>
         let allKeys = [];
         let teamsLoaded = false;
@@ -289,7 +303,7 @@
                     <div class="key-item">
                         <div class="key-info">
                             <div>
-                                <code class="key-code">${keyCode}</code>
+                                <code class="key-code" onclick="copyKey('${keyCode}')">${keyCode}</code>
                                 <div style="margin-top: 8px;">
                                     ${isUnlimited ? '<span class="badge" style="background:#20c997;">无限</span>' : '<span class="badge">一次性</span>'}
                                     ${usedBadge}
@@ -367,11 +381,29 @@
             } catch (error) { console.error('加载 Teams 失败:', error); }
         }
 
+        function formatDateTime(value) {
+            if (!value) return '-';
+            const date = new Date(value);
+            return isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN');
+        }
+
+        function addDays(ts, days) {
+            if (!ts) return null;
+            const date = new Date(ts);
+            if (isNaN(date.getTime())) return null;
+            date.setDate(date.getDate() + days);
+            return date.getTime();
+        }
+
         function displayTeams(teams) {
             const container = document.getElementById('teamsList');
             if (teams.length === 0) { container.innerHTML = '<p>暂无 Team</p>'; return; }
             let html = '<div class="teams-grid">';
             teams.forEach(team => {
+                const createdAt = team.createdAt || team.created_at || team.created;
+                const expiresAt = addDays(createdAt, 30);
+                const rangeText = `${formatDateTime(createdAt)} - ${formatDateTime(expiresAt)}`;
+
                 html += `
                     <div class="team-card">
                         <div class="team-header">
@@ -381,6 +413,7 @@
                         <div class="team-info">
                             <p><strong>Account ID:</strong> <code>${team.accountId}</code></p>
                             <p><strong>状态:</strong> ${team.tokenStatus}</p>
+                            <p><strong>时间范围:</strong> ${rangeText}</p>
                         </div>
                         <div class="team-actions">
                             <button onclick="showTeamModal('${team.id}', '${team.name}')" class="btn btn-primary btn-sm">👥 成员/邀请</button>
@@ -447,7 +480,7 @@
             let html = '<div class="members-list">';
             members.forEach(member => {
                 const isOwner = member.role === 'account-owner';
-                const joinedAt = member.created_at ? new Date(member.created_at).toLocaleString('zh-CN') : '-';
+                const joinedAt = member.joined_at ? new Date(member.joined_at).toLocaleString('zh-CN') : '-';
                 html += `
                     <div class="member-item">
                         <div class="member-info">
@@ -557,7 +590,7 @@
                 const res = await fetch("/api/admin/checkout-link", { method: "POST" });
                 const data = await res.json();
                 if (data.success && data.url) {
-                    window.location.href = data.url;
+                    showCheckoutModal(data.url);
                 } else {
                     alert("提取失败：" + (data.error || JSON.stringify(data)));
                 }
@@ -565,11 +598,32 @@
                 alert("发生错误：" + error);
             }
         }
+
+        function showCheckoutModal(url) {
+            document.getElementById('checkoutLinkInput').value = url;
+            document.getElementById('checkoutModal').style.display = 'block';
+        }
+
+        function closeCheckoutModal() {
+            document.getElementById('checkoutModal').style.display = 'none';
+        }
+
+        function copyCheckoutLink() {
+            const input = document.getElementById('checkoutLinkInput');
+            const url = input.value || '';
+            if (!url) return;
+            navigator.clipboard.writeText(url).then(() => alert('已复制'));
+        }
         
         // Key actions
         function copyKeys(isUnlimited) {
             const keys = allKeys.filter(k => !!k.isUnlimited === isUnlimited).map(k => k.code).join('\\n');
             navigator.clipboard.writeText(keys).then(() => alert('已复制'));
+        }
+
+        function copyKey(code) {
+            if (!code) return;
+            navigator.clipboard.writeText(code).then(() => alert('已复制'));
         }
 
         async function deleteKey(code) {
