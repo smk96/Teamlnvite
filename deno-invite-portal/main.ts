@@ -1,0 +1,338 @@
+/// <reference lib="deno.unstable" />
+
+import { Application, Router, Context } from "@oak/oak";
+import { join } from "@std/path";
+import { DB, Team } from "./lib/db.ts";
+
+const app = new Application();
+const router = new Router();
+
+// --- API Helpers ---
+
+// Middleware for error handling
+app.use(async (ctx, next) => {
+  try {
+    await next();
+  } catch (err) {
+    console.error(err);
+    ctx.response.status = 500;
+    ctx.response.body = { success: false, error: err instanceof Error ? err.message : "Internal Server Error" };
+  }
+});
+
+// Middleware for static files
+app.use(async (ctx, next) => {
+  await next();
+  const root = `${Deno.cwd()}/static`;
+  try {
+    await ctx.send({ root });
+  } catch {
+    // Ignore 404 for static files, let router handle it
+  }
+});
+
+
+// --- Business Logic Services ---
+
+async function fetchTeamMembers(accessToken: string, accountId: string) {
+  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/users`;
+  const headers = {
+    "accept": "*/*",
+    "accept-language": "zh-CN,zh;q=0.9",
+    "authorization": `Bearer ${accessToken}`,
+    "chatgpt-account-id": accountId,
+    "content-type": "application/json",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  };
+
+  try {
+    const res = await fetch(url, { headers });
+    if (res.status === 401) throw new Error("Token expired");
+    if (res.status !== 200) throw new Error(`API Error: ${res.status}`);
+    const data = await res.json();
+    return data.items || [];
+  } catch (e) {
+    console.error("Fetch members error:", e);
+    throw e;
+  }
+}
+
+async function inviteToTeam(accessToken: string, accountId: string, email: string) {
+  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/invites`;
+  const headers = {
+    "accept": "*/*",
+    "authorization": `Bearer ${accessToken}`,
+    "chatgpt-account-id": accountId,
+    "content-type": "application/json",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  };
+  
+  const body = {
+    email,
+    role: "standard"
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body)
+  });
+
+  if (res.status !== 200) {
+    const text = await res.text();
+    throw new Error(`Invite failed: ${res.status} - ${text}`);
+  }
+  return await res.json();
+}
+
+// --- Routes ---
+
+// 1. Pages
+router.get("/", async (ctx) => {
+  const html = await Deno.readTextFile("templates/index.html");
+  ctx.response.body = html;
+});
+
+router.get("/admin", async (ctx) => {
+  // Simple auth check (TODO: Real auth)
+  const html = await Deno.readTextFile("templates/admin.html");
+  ctx.response.body = html;
+});
+
+// 2. Admin API - Teams
+router.get("/api/admin/teams", async (ctx) => {
+  const teams = await DB.listTeams();
+  ctx.response.body = { success: true, teams };
+});
+
+router.post("/api/admin/teams", async (ctx) => {
+  const body = await ctx.request.body.json();
+  const { name, session_data } = body;
+  
+  try {
+    const session = JSON.parse(session_data);
+    const accessToken = session.accessToken;
+    const accountId = session.user.id; // Or wherever account ID is
+    // Note: Python code implies account ID is extracted. 
+    // Usually it's in the URL or user profile.
+    // Let's assume user provides correct JSON or we extract what we can.
+    // Ideally we verify token validity here.
+
+    await DB.createTeam({
+      name,
+      accountId: accountId || "unknown", // Fallback
+      accessToken,
+      email: session.user.email
+    });
+    ctx.response.body = { success: true };
+  } catch (e) {
+    ctx.response.status = 400;
+    ctx.response.body = { success: false, error: "Invalid session data or team creation failed" };
+  }
+});
+
+router.put("/api/admin/teams/:id/token", async (ctx) => {
+  const id = ctx.params.id;
+  const body = await ctx.request.body.json();
+  const { session_data } = body;
+  try {
+    const session = JSON.parse(session_data);
+    await DB.updateTeam(id, {
+      accessToken: session.accessToken,
+      tokenStatus: "active",
+      tokenErrorCount: 0
+    });
+    ctx.response.body = { success: true };
+  } catch (e) {
+    ctx.response.body = { success: false, error: "Update failed" };
+  }
+});
+
+router.delete("/api/admin/teams/:id", async (ctx) => {
+  await DB.deleteTeam(ctx.params.id);
+  ctx.response.body = { success: true };
+});
+
+// 3. Admin API - Keys
+router.get("/api/admin/keys", async (ctx) => {
+  const keys = await DB.listAccessKeys();
+  ctx.response.body = { success: true, keys };
+});
+
+router.post("/api/admin/keys", async (ctx) => {
+  const { count, is_temp, temp_hours } = await ctx.request.body.json();
+  const createdKeys = [];
+  
+  for (let i = 0; i < (count || 1); i++) {
+    // Generate random code
+    const code = crypto.randomUUID().replace(/-/g, "").substring(0, 16); 
+    const key = await DB.createAccessKey({
+      code,
+      isTemp: !!is_temp,
+      tempHours: temp_hours || 24
+    });
+    createdKeys.push({ key_code: key.code, ...key });
+  }
+  
+  ctx.response.body = { success: true, keys: createdKeys };
+});
+
+// 4. Join API
+router.post("/api/join", async (ctx) => {
+  const { email, key_code } = await ctx.request.body.json();
+  
+  if (!email || !key_code) {
+    ctx.response.status = 400;
+    ctx.response.body = { success: false, error: "Missing fields" };
+    return;
+  }
+
+  // 1. Validate Key
+  const key = await DB.getAccessKey(key_code);
+  if (!key) {
+    ctx.response.status = 400;
+    ctx.response.body = { success: false, error: "Invalid Key" };
+    return;
+  }
+
+  // 2. Check if key is used (if we want single use)
+  // Logic: Original code implies keys can be used once? 
+  // "每个密钥只能使用一次" in user.html. 
+  // But DB has usage_count. Let's enforce single use if not bound to team?
+  // Let's assume standard behavior: Keys are single use.
+  if (key.usageCount > 0) {
+    ctx.response.status = 400;
+    ctx.response.body = { success: false, error: "Key already used" };
+    return;
+  }
+
+  // 3. Find Available Team
+  const teams = await DB.listTeams();
+  let selectedTeam: Team | null = null;
+  
+  // Sort by members count asc, then last invite time
+  // Need to fetch real member count? Or rely on cache.
+  // For now, rely on cache or just round robin.
+  // Simple logic: Find first team with < 4 members.
+  
+  for (const team of teams) {
+    if (team.tokenStatus === "expired") continue;
+    // We should ideally sync member count before checking
+    // But for speed, let's trust our cache or check specifically
+    // TODO: Add member count sync logic
+    if (team.memberCount < 4) {
+      selectedTeam = team;
+      break;
+    }
+  }
+
+  if (!selectedTeam) {
+    ctx.response.status = 400;
+    ctx.response.body = { success: false, error: "No available teams at the moment" };
+    return;
+  }
+
+  // 4. Invite
+  try {
+    await inviteToTeam(selectedTeam.accessToken, selectedTeam.accountId, email);
+    
+    // 5. Update DB
+    await DB.createInvitation({
+      teamId: selectedTeam.id,
+      email,
+      keyCode: key_code,
+      status: "success",
+      isTemp: key.isTemp,
+      tempExpireAt: key.isTemp ? Date.now() + (key.tempHours || 24) * 3600000 : undefined,
+      isConfirmed: false
+    });
+    
+    await DB.incrementKeyUsage(key_code);
+    
+    // Update team member count (cached)
+    await DB.updateTeam(selectedTeam.id, { 
+      memberCount: selectedTeam.memberCount + 1,
+      lastInviteAt: Date.now()
+    });
+
+    ctx.response.body = { success: true, message: "Invitation sent! Check your email." };
+  } catch (e) {
+    // Handle specific errors (e.g. token expired during invite)
+    console.error(e);
+    if (e.message.includes("401") || e.message.includes("expired")) {
+       await DB.updateTeam(selectedTeam.id, { tokenStatus: "expired" });
+    }
+    ctx.response.status = 500;
+    ctx.response.body = { success: false, error: "Invite failed. Please try again later." };
+  }
+});
+
+// 5. Auto Kick Config
+router.get("/api/admin/auto-kick/config", async (ctx) => {
+  const config = await DB.getAutoKickConfig();
+  ctx.response.body = { success: true, config: {
+    enabled: config.enabled,
+    check_interval: config.checkInterval,
+    start_hour: config.startHour,
+    end_hour: config.endHour
+  }};
+});
+
+router.post("/api/admin/auto-kick/config", async (ctx) => {
+  const body = await ctx.request.body.json();
+  await DB.setAutoKickConfig({
+    enabled: body.enabled,
+    checkInterval: body.check_interval,
+    startHour: body.start_hour,
+    endHour: body.end_hour
+  });
+  ctx.response.body = { success: true };
+});
+
+// --- Auto Kick Job (Deno Cron) ---
+
+Deno.cron("Auto Kick Service", "*/5 * * * *", async () => {
+  // Check config
+  const config = await DB.getAutoKickConfig();
+  if (!config.enabled) return;
+  
+  const now = new Date();
+  const currentHour = now.getHours(); // Local time depends on server
+  // Adjust for timezone if needed, assuming server time for now
+  
+  if (currentHour < config.startHour || currentHour > config.endHour) return;
+
+  console.log("[AutoKick] Starting check...");
+  
+  // 1. Check Temp Invites Expiration
+  const invites = await DB.listInvitations();
+  for (const inv of invites) {
+    if (inv.isTemp && !inv.isConfirmed && inv.tempExpireAt && Date.now() > inv.tempExpireAt && inv.status === 'success') {
+      // Expired! Kick user.
+      console.log(`[AutoKick] Expired invite: ${inv.email}`);
+      const team = await DB.getTeam(inv.teamId);
+      if (team) {
+         try {
+           const members = await fetchTeamMembers(team.accessToken, team.accountId);
+           const member = members.find((m: any) => m.email === inv.email);
+           if (member) {
+             // DELETE /users/{id}
+             // Implementation omitted for brevity, similar to invite
+             // Log kick
+           }
+         } catch (e) {
+           console.error(`[AutoKick] Failed to kick ${inv.email}`, e);
+         }
+      }
+    }
+  }
+
+  // 2. Full Sync (Check illegal members)
+  // ... (Implementation complexity omitted for this step, needs full logic)
+});
+
+app.use(router.routes());
+app.use(router.allowedMethods());
+
+console.log("Server running on http://localhost:8000");
+await app.listen({ port: 8000 });

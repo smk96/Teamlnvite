@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加入 ChatGPT Team</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>🚀 加入 ChatGPT Team</h1>
+            <p class="subtitle">输入您的邮箱和访问密钥即可加入团队</p>
+            
+            <form id="joinForm">
+                <div class="form-group">
+                    <label for="email">📧 邮箱地址</label>
+                    <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="key_code">🔑 访问密钥</label>
+                    <input type="text" id="key_code" name="key_code" placeholder="输入您获得的访问密钥" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">加入团队</button>
+            </form>
+            
+            <div id="message" class="message" style="display: none;"></div>
+        </div>
+        
+        <div class="footer">
+            <p>💡 提示：访问密钥由团队管理员提供，每个密钥只能使用一次</p>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('joinForm');
+        const messageDiv = document.getElementById('message');
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value.trim();
+            const key_code = document.getElementById('key_code').value.trim();
+
+            if (!email || !key_code) {
+                showMessage('请填写所有字段', 'error');
+                return;
+            }
+
+            // 确认邮箱是否正确
+            const confirmMessage = `📧 请确认您的邮箱地址是否正确：\n\n${email}\n\n⚠️ 邀请邮件将发送到此邮箱，请仔细核对！\n如果邮箱错误，请点击"取消"重新输入。`;
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+
+            // 禁用按钮
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '处理中...';
+            
+            try {
+                const response = await fetch('/api/join', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, key_code })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    form.reset();
+                    
+                    // 显示额外提示
+                    setTimeout(() => {
+                        if (confirm('✅ 邀请已发送！\n\n是否打开邮箱查看邀请？')) {
+                            window.open('https://mail.google.com', '_blank');
+                        }
+                    }, 1000);
+                } else {
+                    showMessage(data.error || '加入失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '加入团队';
+            }
+        });
+        
+        function showMessage(text, type) {
+            messageDiv.innerHTML = text.replace(/\n/g, '<br>');
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 10000);
+            } else {
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>
