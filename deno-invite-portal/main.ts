@@ -117,6 +117,61 @@ async function inviteToTeam(accessToken: string, accountId: string, email: strin
   return await res.json();
 }
 
+async function fetchPendingInvites(accessToken: string, accountId: string) {
+  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/invites`;
+  const headers = {
+    "accept": "*/*",
+    "authorization": `Bearer ${accessToken}`,
+    "chatgpt-account-id": accountId,
+    "content-type": "application/json",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  };
+
+  const res = await fetch(url, { headers });
+  if (res.status !== 200) {
+    const text = await res.text();
+    throw new Error(`Fetch invites failed: ${res.status} - ${text}`);
+  }
+  const data = await res.json();
+  return data.items || [];
+}
+
+async function revokeInvite(accessToken: string, accountId: string, inviteId: string) {
+  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/invites/${inviteId}`;
+  const headers = {
+    "accept": "*/*",
+    "authorization": `Bearer ${accessToken}`,
+    "chatgpt-account-id": accountId,
+    "content-type": "application/json",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  };
+
+  const res = await fetch(url, { method: "DELETE", headers });
+  if (res.status !== 200 && res.status !== 204) {
+    const text = await res.text();
+    throw new Error(`Revoke invite failed: ${res.status} - ${text}`);
+  }
+  return true;
+}
+
+async function kickMember(accessToken: string, accountId: string, userId: string) {
+  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/users/${userId}`;
+  const headers = {
+    "accept": "*/*",
+    "authorization": `Bearer ${accessToken}`,
+    "chatgpt-account-id": accountId,
+    "content-type": "application/json",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  };
+
+  const res = await fetch(url, { method: "DELETE", headers });
+  if (res.status !== 200 && res.status !== 204) {
+    const text = await res.text();
+    throw new Error(`Kick failed: ${res.status} - ${text}`);
+  }
+  return true;
+}
+
 // --- Routes ---
 
 // 1. Pages
@@ -198,6 +253,87 @@ router.delete("/api/admin/teams/:id", async (ctx) => {
   ctx.response.body = { success: true };
 });
 
+router.get("/api/admin/teams/:id/members", async (ctx) => {
+  const team = await DB.getTeam(ctx.params.id);
+  if (!team) {
+    ctx.response.status = 404;
+    ctx.response.body = { success: false, error: "Team not found" };
+    return;
+  }
+
+  try {
+    const members = await fetchTeamMembers(team.accessToken, team.accountId);
+    ctx.response.body = { success: true, members };
+  } catch (e) {
+    ctx.response.status = 500;
+    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Failed to fetch members" };
+  }
+});
+
+router.delete("/api/admin/teams/:id/members/:userId", async (ctx) => {
+  const team = await DB.getTeam(ctx.params.id);
+  if (!team) {
+    ctx.response.status = 404;
+    ctx.response.body = { success: false, error: "Team not found" };
+    return;
+  }
+
+  let email = "";
+  try {
+    if (ctx.request.hasBody) {
+      const body = await ctx.request.body.json();
+      email = body?.email || "";
+    }
+  } catch {
+    // ignore body parse errors
+  }
+
+  try {
+    await kickMember(team.accessToken, team.accountId, ctx.params.userId);
+    if (email) {
+      await DB.deleteInvitationsByEmail(team.id, email);
+    }
+    ctx.response.body = { success: true };
+  } catch (e) {
+    ctx.response.status = 500;
+    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Kick failed" };
+  }
+});
+
+router.get("/api/admin/teams/:id/pending-invites", async (ctx) => {
+  const team = await DB.getTeam(ctx.params.id);
+  if (!team) {
+    ctx.response.status = 404;
+    ctx.response.body = { success: false, error: "Team not found" };
+    return;
+  }
+
+  try {
+    const invites = await fetchPendingInvites(team.accessToken, team.accountId);
+    ctx.response.body = { success: true, invites };
+  } catch (e) {
+    ctx.response.status = 500;
+    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Failed to fetch invites" };
+  }
+});
+
+router.delete("/api/admin/teams/:id/pending-invites/:inviteId", async (ctx) => {
+  const team = await DB.getTeam(ctx.params.id);
+  if (!team) {
+    ctx.response.status = 404;
+    ctx.response.body = { success: false, error: "Team not found" };
+    return;
+  }
+
+  try {
+    await revokeInvite(team.accessToken, team.accountId, ctx.params.inviteId);
+    ctx.response.body = { success: true };
+  } catch (e) {
+    ctx.response.status = 500;
+    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Revoke failed" };
+  }
+});
+
 // 3. Admin API - Keys
 router.get("/api/admin/keys", async (ctx) => {
   const keys = await DB.listAccessKeys();
@@ -205,15 +341,16 @@ router.get("/api/admin/keys", async (ctx) => {
 });
 
 router.post("/api/admin/keys", async (ctx) => {
-  const { count, is_temp, temp_hours } = await ctx.request.body.json();
+  const { count, is_temp, temp_hours, is_unlimited } = await ctx.request.body.json();
     const createdKeys: any[] = [];
     
     for (let i = 0; i < (count || 1); i++) {
     // Generate random code
-    const code = crypto.randomUUID().replace(/-/g, "").substring(0, 16); 
+    const code = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
     const key = await DB.createAccessKey({
       code,
       isTemp: !!is_temp,
+      isUnlimited: !!is_unlimited,
       tempHours: temp_hours || 24
     });
     createdKeys.push({ key_code: key.code, ...key });
@@ -245,7 +382,7 @@ router.post("/api/join", async (ctx) => {
   // "每个密钥只能使用一次" in user.html. 
   // But DB has usage_count. Let's enforce single use if not bound to team?
   // Let's assume standard behavior: Keys are single use.
-  if (key.usageCount > 0) {
+  if (!key.isUnlimited && key.usageCount > 0) {
     ctx.response.status = 400;
     ctx.response.body = { success: false, error: "Key already used" };
     return;
