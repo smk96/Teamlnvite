@@ -53,13 +53,16 @@ app.use(async (ctx, next) => {
 
 // Middleware for static files
 app.use(async (ctx, next) => {
-  await next();
-  const root = join(__dirname, "static");
-  try {
-    await ctx.send({ root });
-  } catch {
-    // Ignore 404 for static files, let router handle it
+  if (ctx.request.url.pathname.startsWith("/static/")) {
+    const root = __dirname;
+    try {
+      await ctx.send({ root });
+      return;
+    } catch {
+      // Ignore
+    }
   }
+  await next();
 });
 
 
