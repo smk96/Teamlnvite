@@ -145,14 +145,16 @@ export const DB = {
   // --- Invitations ---
   async createInvitation(invite: Omit<Invitation, "id" | "createdAt">) {
     const id = crypto.randomUUID();
+    const normalizedEmail = invite.email.trim().toLowerCase();
     const newInvite: Invitation = {
       ...invite,
+      email: normalizedEmail,
       id,
       createdAt: Date.now(),
     };
     await kv.set(["invitations", id], newInvite);
-    // Index by email for quick lookup (auto-kick check)
-    await kv.set(["invitations_by_email", invite.email.toLowerCase(), invite.teamId], id);
+    // Index by normalized email for quick lookup (auto-kick check)
+    await kv.set(["invitations_by_email", normalizedEmail, invite.teamId], id);
     return newInvite;
   },
 
@@ -166,10 +168,11 @@ export const DB = {
   },
 
   async getInvitationsByEmail(email: string) {
-    // This is a bit inefficient without a proper secondary index scan, 
+    // This is a bit inefficient without a proper secondary index scan,
     // but for this scale it's okay to scan all invites or use the index we made.
     // The index ["invitations_by_email", email, teamId] -> id
-    const iter = kv.list({ prefix: ["invitations_by_email", email.toLowerCase()] });
+    const normalized = email.trim().toLowerCase();
+    const iter = kv.list({ prefix: ["invitations_by_email", normalized] });
     const inviteIds: string[] = [];
     for await (const res of iter) {
       inviteIds.push(res.value as string);
@@ -189,10 +192,10 @@ export const DB = {
   },
 
   async getLatestInvitationByEmail(teamId: string, email: string) {
-    const normalized = email.toLowerCase();
+    const normalized = email.trim().toLowerCase();
     const invites = await this.listInvitations();
     const matches = invites
-      .filter((inv) => inv.teamId === teamId && inv.email.toLowerCase() === normalized)
+      .filter((inv) => inv.teamId === teamId && inv.email.trim().toLowerCase() === normalized)
       .sort((a, b) => b.createdAt - a.createdAt);
     return matches[0];
   },
@@ -206,10 +209,10 @@ export const DB = {
   },
 
   async deleteInvitationsByEmail(teamId: string, email: string) {
-    const normalized = email.toLowerCase();
+    const normalized = email.trim().toLowerCase();
     const invites = await this.listInvitations();
     const matches = invites.filter(
-      (inv) => inv.teamId === teamId && inv.email.toLowerCase() === normalized
+      (inv) => inv.teamId === teamId && inv.email.trim().toLowerCase() === normalized
     );
 
     for (const inv of matches) {
