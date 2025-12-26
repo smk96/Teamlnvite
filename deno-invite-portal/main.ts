@@ -100,7 +100,8 @@ async function inviteToTeam(accessToken: string, accountId: string, email: strin
   
   const body = {
     email_addresses: [email],
-    role: "standard-user"
+    role: "standard-user",
+    resend_emails: false
   };
 
   const res = await fetch(url, {
@@ -109,7 +110,7 @@ async function inviteToTeam(accessToken: string, accountId: string, email: strin
     body: JSON.stringify(body)
   });
 
-  if (res.status !== 200) {
+  if (res.status !== 200 && res.status !== 201) {
     const text = await res.text();
     throw new Error(`Invite failed: ${res.status} - ${text}`);
   }
@@ -153,13 +154,12 @@ router.post("/api/admin/teams", async (ctx) => {
     }
 
     const accessToken = session.accessToken;
-    // Use explicit accountId if provided, otherwise fallback to user.id (which might fail if it's not a UUID)
-    // We recommend users to provide "accountId" in the JSON.
-    const accountId = session.accountId || session.user?.id;
+    // Prefer account.id (original Flask), then accountId, then user.id (may be user-xxx and invalid)
+    const accountId = session.account?.id || session.accountId || session.user?.id;
     
     if (!accountId) {
        ctx.response.status = 400;
-       ctx.response.body = { success: false, error: "Invalid Session JSON: Missing accountId or user.id" };
+       ctx.response.body = { success: false, error: "Invalid Session JSON: Missing account.id, accountId or user.id" };
        return;
     }
 
@@ -254,14 +254,48 @@ router.post("/api/join", async (ctx) => {
   // 3. Find Available Team (actively refresh member count + token status)
   const teams = await DB.listTeams();
   let selectedTeam: Team | null = null;
+  const normalizedEmail = email.toLowerCase();
 
   for (const team of teams) {
     if (team.tokenStatus === "expired") continue;
 
     try {
       const members = await fetchTeamMembers(team.accessToken, team.accountId);
-      const memberCount = Array.isArray(members) ? members.length : 0;
+      const nonOwnerMembers = Array.isArray(members)
+        ? members.filter((m: any) => m?.role !== "account-owner")
+        : [];
+      const memberCount = nonOwnerMembers.length;
       const refreshed = await DB.updateTeam(team.id, { memberCount, tokenStatus: "active" });
+
+      const memberEmails = nonOwnerMembers
+        .map((m: any) => String(m?.email || "").toLowerCase())
+        .filter(Boolean);
+
+      if (memberEmails.includes(normalizedEmail)) {
+        const tempExpireAt = key.isTemp
+          ? Date.now() + (key.tempHours || 24) * 3600000
+          : undefined;
+
+        await DB.createInvitation({
+          teamId: refreshed.id,
+          email,
+          keyCode: key_code,
+          status: "success",
+          isTemp: key.isTemp,
+          tempExpireAt,
+          isConfirmed: false
+        });
+
+        await DB.incrementKeyUsage(key_code);
+
+        ctx.response.body = {
+          success: true,
+          message: `✅ 您已是 ${refreshed.name} 团队成员！`,
+          team_name: refreshed.name,
+          email
+        };
+        return;
+      }
 
       if (memberCount < 4 && !selectedTeam) {
         selectedTeam = refreshed;
