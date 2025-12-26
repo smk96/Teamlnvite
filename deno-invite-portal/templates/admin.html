@@ -126,6 +126,7 @@
             <h2>📋 Teams 列表</h2>
             <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
                 <button onclick="toggleTeamsList()" class="btn btn-primary" id="toggleTeamsBtn">👁️ 查看Teams</button>
+                <button onclick="getAccountCheckoutLink()" class="btn btn-secondary">🔗 获取账号链接</button>
             </div>
             <div id="teamsList" style="display: none;"></div>
         </div>
@@ -548,6 +549,49 @@
                 }
             } catch (error) {
                 alert('请求失败: ' + error.message);
+            }
+        }
+
+        async function getAccountCheckoutLink() {
+            try {
+                const sessionRes = await fetch("/api/auth/session");
+                const sessionData = await sessionRes.json();
+                if (!sessionData.accessToken) {
+                    alert("请先登录ChatGPT！");
+                    return;
+                }
+
+                const payload = {
+                    plan_name: "chatgptteamplan",
+                    team_plan_data: {
+                        workspace_name: "time machine",
+                        price_interval: "month",
+                        seat_quantity: 5
+                    },
+                    promo_campaign: {
+                        promo_campaign_id: "team-1-month-free",
+                        is_coupon_from_query_param: true
+                    },
+                    checkout_ui_mode: "redirect"
+                };
+
+                const res = await fetch("https://chatgpt.com/backend-api/payments/checkout", {
+                    method: "POST",
+                    headers: {
+                        Authorization: "Bearer " + sessionData.accessToken,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert("提取失败：" + (data.detail || JSON.stringify(data)));
+                }
+            } catch (error) {
+                alert("发生错误：" + error);
             }
         }
         
