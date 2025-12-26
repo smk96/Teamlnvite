@@ -1,8 +1,10 @@
 /// <reference lib="deno.unstable" />
 
 import { Application, Router, Context } from "@oak/oak";
-import { join } from "@std/path";
+import { join, dirname, fromFileUrl } from "@std/path";
 import { DB, Team } from "./lib/db.ts";
+
+const __dirname = dirname(fromFileUrl(import.meta.url));
 
 const app = new Application();
 const router = new Router();
@@ -23,7 +25,7 @@ app.use(async (ctx, next) => {
 // Middleware for static files
 app.use(async (ctx, next) => {
   await next();
-  const root = `${Deno.cwd()}/static`;
+  const root = join(__dirname, "static");
   try {
     await ctx.send({ root });
   } catch {
@@ -89,13 +91,13 @@ async function inviteToTeam(accessToken: string, accountId: string, email: strin
 
 // 1. Pages
 router.get("/", async (ctx) => {
-  const html = await Deno.readTextFile("templates/index.html");
+  const html = await Deno.readTextFile(join(__dirname, "templates", "index.html"));
   ctx.response.body = html;
 });
 
 router.get("/admin", async (ctx) => {
   // Simple auth check (TODO: Real auth)
-  const html = await Deno.readTextFile("templates/admin.html");
+  const html = await Deno.readTextFile(join(__dirname, "templates", "admin.html"));
   ctx.response.body = html;
 });
 
@@ -161,9 +163,9 @@ router.get("/api/admin/keys", async (ctx) => {
 
 router.post("/api/admin/keys", async (ctx) => {
   const { count, is_temp, temp_hours } = await ctx.request.body.json();
-  const createdKeys = [];
-  
-  for (let i = 0; i < (count || 1); i++) {
+    const createdKeys: any[] = [];
+    
+    for (let i = 0; i < (count || 1); i++) {
     // Generate random code
     const code = crypto.randomUUID().replace(/-/g, "").substring(0, 16); 
     const key = await DB.createAccessKey({
