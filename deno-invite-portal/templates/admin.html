@@ -71,9 +71,12 @@
                 </div>
                 <div class="form-group">
                     <label>Session JSON (从浏览器复制):</label>
-                    <textarea name="session_data" required placeholder='{"user": {...}, "accessToken": "..."}' rows="6"></textarea>
+                    <textarea name="session_data" id="sessionDataInput" required placeholder='{"user": {...}, "accessToken": "..."}' rows="6"></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary">添加 Team</button>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary">添加 Team</button>
+                    <button type="button" onclick="getAccountCheckoutLink()" class="btn btn-secondary">🔗 获取账号链接</button>
+                </div>
             </form>
         </div>
 
@@ -126,7 +129,6 @@
             <h2>📋 Teams 列表</h2>
             <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
                 <button onclick="toggleTeamsList()" class="btn btn-primary" id="toggleTeamsBtn">👁️ 查看Teams</button>
-                <button onclick="getAccountCheckoutLink()" class="btn btn-secondary">🔗 获取账号链接</button>
             </div>
             <div id="teamsList" style="display: none;"></div>
         </div>
@@ -586,8 +588,18 @@
         }
 
         async function getAccountCheckoutLink() {
+            const sessionData = document.getElementById('sessionDataInput').value;
+            if (!sessionData) {
+                alert("请先在上方输入 Session JSON");
+                return;
+            }
+
             try {
-                const res = await fetch("/api/admin/checkout-link", { method: "POST" });
+                const res = await fetch("/api/admin/checkout-link", {
+                    method: "POST",
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_data: sessionData })
+                });
                 const data = await res.json();
                 if (data.success && data.url) {
                     showCheckoutModal(data.url);
