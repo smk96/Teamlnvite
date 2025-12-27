@@ -413,6 +413,91 @@ router.delete("/api/admin/teams/:id/pending-invites/:inviteId", async (ctx) => {
   }
 });
 
+async function handleAdminInvites(team: Team, emails: string[]) {
+  const cleanEmails = emails.map((e) => String(e || "").trim()).filter(Boolean);
+  const results = await Promise.all(
+    cleanEmails.map(async (email) => {
+      try {
+        await inviteToTeam(team.accessToken, team.accountId, email);
+        await DB.createInvitation({
+          teamId: team.id,
+          email,
+          keyCode: "ADMIN_DIRECT",
+          status: "success",
+          isTemp: false,
+          isConfirmed: false
+        });
+        return { email, success: true };
+      } catch (e) {
+        return { email, success: false, error: e instanceof Error ? e.message : "Invite failed" };
+      }
+    })
+  );
+
+  const successCount = results.filter((r) => r.success).length;
+  const failCount = results.length - successCount;
+
+  if (successCount > 0) {
+    await DB.updateTeam(team.id, { lastInviteAt: Date.now() });
+  }
+
+  return { results, successCount, failCount };
+}
+
+router.post("/api/admin/teams/:id/invite", async (ctx) => {
+  const team = await DB.getTeam(ctx.params.id);
+  if (!team) {
+    ctx.response.status = 404;
+    ctx.response.body = { success: false, error: "Team not found" };
+    return;
+  }
+
+  const body = await ctx.request.body.json();
+  const email = body?.email;
+  if (!email) {
+    ctx.response.status = 400;
+    ctx.response.body = { success: false, error: "Email is required" };
+    return;
+  }
+
+  try {
+    const data = await handleAdminInvites(team, [email]);
+    const ok = data.successCount > 0;
+    ctx.response.body = { success: ok, ...data };
+  } catch (e) {
+    console.error("Direct invite error:", e);
+    ctx.response.status = 500;
+    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Invite failed" };
+  }
+});
+
+router.post("/api/admin/teams/:id/invites", async (ctx) => {
+  const team = await DB.getTeam(ctx.params.id);
+  if (!team) {
+    ctx.response.status = 404;
+    ctx.response.body = { success: false, error: "Team not found" };
+    return;
+  }
+
+  const body = await ctx.request.body.json();
+  const emails = Array.isArray(body?.emails) ? body.emails : [];
+  if (!emails.length) {
+    ctx.response.status = 400;
+    ctx.response.body = { success: false, error: "Emails are required" };
+    return;
+  }
+
+  try {
+    const data = await handleAdminInvites(team, emails);
+    const ok = data.successCount > 0;
+    ctx.response.body = { success: ok, ...data };
+  } catch (e) {
+    console.error("Direct invites error:", e);
+    ctx.response.status = 500;
+    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Invite failed" };
+  }
+});
+
 // 3. Admin API - Keys
 router.get("/api/admin/keys", async (ctx) => {
   const keys = await DB.listAccessKeys();
