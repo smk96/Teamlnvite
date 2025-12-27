@@ -27,24 +27,52 @@ app.use(async (ctx, next) => {
   if (ctx.request.url.pathname.startsWith("/admin") || ctx.request.url.pathname.startsWith("/api/admin")) {
     const adminPassword = Deno.env.get("ADMIN_PASSWORD");
     if (adminPassword) {
-      const authHeader = ctx.request.headers.get("Authorization");
-      if (!authHeader) {
+      const unauthorized = () => {
         ctx.response.status = 401;
         ctx.response.headers.set("WWW-Authenticate", 'Basic realm="Admin Area"');
+        ctx.response.headers.set("Content-Type", "text/html; charset=utf-8");
+        ctx.response.body = `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>需要认证</title>
+  <style>
+    body { margin:0; font-family: Arial, sans-serif; background:#f7f7f8; color:#202123; }
+    .wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; }
+    .card { background:#fff; border:1px solid #e5e5e5; border-radius:12px; padding:24px; box-shadow:0 6px 18px rgba(0,0,0,0.08); max-width:420px; text-align:center; }
+    .title { font-size:18px; margin-bottom:8px; }
+    .desc { font-size:13px; color:#6e6e80; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="title">需要管理员认证</div>
+      <div class="desc">请输入正确的管理员密码后继续。</div>
+    </div>
+  </div>
+</body>
+</html>
+        `;
+      };
+
+      const authHeader = ctx.request.headers.get("Authorization");
+      if (!authHeader) {
+        unauthorized();
         return;
       }
       const [type, credentials] = authHeader.split(" ");
       if (type !== "Basic") {
-         ctx.response.status = 401;
-         return;
+        unauthorized();
+        return;
       }
       const decoded = atob(credentials);
       const [user, pass] = decoded.split(":");
       // Username can be anything, check password
       if (pass !== adminPassword) {
-         ctx.response.status = 403;
-         ctx.response.body = "Forbidden";
-         return;
+        unauthorized();
+        return;
       }
     }
   }
