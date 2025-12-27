@@ -444,17 +444,33 @@ router.delete("/api/admin/keys/:code", async (ctx) => {
 });
 
 router.post("/api/admin/checkout-link", async (ctx) => {
-  const teams = await DB.listTeams();
-  const activeTeam = teams.find((t) => t.tokenStatus !== "expired");
-
-  if (!activeTeam) {
-    ctx.response.status = 400;
-    ctx.response.body = { success: false, error: "没有可用的 Team Token" };
-    return;
-  }
-
   try {
-    const data = await createCheckoutLink(activeTeam.accessToken);
+    const body = await ctx.request.body.json();
+    const { session_data } = body;
+    let accessToken = "";
+
+    if (session_data) {
+       // Use provided session data
+       const session = JSON.parse(session_data);
+       if (!session.accessToken) {
+         ctx.response.status = 400;
+         ctx.response.body = { success: false, error: "Invalid Session JSON: Missing accessToken" };
+         return;
+       }
+       accessToken = session.accessToken;
+    } else {
+       // Fallback to active team in DB (Original behavior, kept for compatibility if needed)
+       const teams = await DB.listTeams();
+       const activeTeam = teams.find((t) => t.tokenStatus !== "expired");
+       if (!activeTeam) {
+        ctx.response.status = 400;
+        ctx.response.body = { success: false, error: "Missing session_data and no active Team Token found" };
+        return;
+       }
+       accessToken = activeTeam.accessToken;
+    }
+
+    const data = await createCheckoutLink(accessToken);
     ctx.response.body = { success: true, url: data.url };
   } catch (e) {
     ctx.response.status = 500;
