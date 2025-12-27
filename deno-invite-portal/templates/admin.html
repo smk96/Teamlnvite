@@ -371,7 +371,12 @@
                 <span class="close" onclick="closeTeamModal()">&times;</span>
             </div>
             <div class="modal-body">
-                <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">成员列表</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="font-size: 14px; color: var(--text-secondary); margin: 0;">成员列表</h3>
+                    <button onclick="promptInviteMember()" class="btn btn-primary btn-sm" style="padding: 4px 10px; font-size: 12px;">
+                        <i class="fa-solid fa-paper-plane"></i> 直接邀请
+                    </button>
+                </div>
                 <div id="membersList" style="background: #f8fafc; border-radius: 8px; border: 1px solid var(--border-color);">加载中...</div>
                 
                 <h3 style="font-size: 14px; color: var(--text-secondary); margin: 24px 0 12px;">待接受邀请</h3>
@@ -691,6 +696,33 @@
             document.getElementById('teamModal').style.display = 'block';
             await loadMembers(teamId);
             await loadPendingInvites(teamId);
+        }
+
+        async function promptInviteMember() {
+            const email = prompt("请输入要邀请的邮箱地址:");
+            if (!email) return;
+            
+            if (!email.includes('@')) {
+                alert("请输入有效的邮箱地址");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/teams/${currentTeamId}/invite`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert("邀请已发送！");
+                    await loadPendingInvites(currentTeamId);
+                } else {
+                    alert("邀请失败: " + data.error);
+                }
+            } catch (error) {
+                alert("请求出错: " + error.message);
+            }
         }
 
         async function loadMembers(teamId) {
