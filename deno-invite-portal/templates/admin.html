@@ -727,6 +727,15 @@
             document.getElementById('inviteModal').style.display = 'none';
         }
 
+        function parseJsonSafe(text) {
+            if (!text) return null;
+            try {
+                return JSON.parse(text);
+            } catch {
+                return null;
+            }
+        }
+
         async function submitInvite(e) {
             e.preventDefault();
             const emailInput = document.getElementById('inviteEmailInput');
@@ -752,18 +761,23 @@
             let errors = [];
 
             try {
-                // Send invites sequentially or in parallel. Parallel is faster.
+                // Send invites in parallel.
                 const promises = emails.map(email =>
                     fetch(`/api/admin/teams/${currentTeamId}/invite`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email })
                     }).then(async res => {
-                        const data = await res.json();
-                        if (data.success) successCount++;
-                        else {
+                        const text = await res.text();
+                        const data = parseJsonSafe(text);
+                        const ok = data ? !!data.success : res.ok;
+
+                        if (ok) {
+                            successCount++;
+                        } else {
                             failCount++;
-                            errors.push(`${email}: ${data.error}`);
+                            const errMsg = data?.error || (text ? text : `HTTP ${res.status}`);
+                            errors.push(`${email}: ${errMsg}`);
                         }
                     }).catch(err => {
                         failCount++;
