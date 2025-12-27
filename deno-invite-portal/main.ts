@@ -285,7 +285,25 @@ function formatExportDateTime(value: number | undefined) {
 // 2. Admin API - Teams
 router.get("/api/admin/teams", async (ctx) => {
   const teams = await DB.listTeams();
-  ctx.response.body = { success: true, teams };
+  const refreshed = await Promise.all(
+    teams.map(async (team) => {
+      let memberCount = team.memberCount || 0;
+      let tokenStatus = team.tokenStatus;
+      try {
+        const members = await fetchTeamMembers(team.accessToken, team.accountId);
+        const nonOwnerMembers = Array.isArray(members)
+          ? members.filter((m: any) => m?.role !== "account-owner")
+          : [];
+        memberCount = nonOwnerMembers.length;
+        tokenStatus = "active";
+      } catch {
+        tokenStatus = "expired";
+      }
+      return await DB.updateTeam(team.id, { memberCount, tokenStatus });
+    })
+  );
+
+  ctx.response.body = { success: true, teams: refreshed };
 });
 
 router.get("/api/admin/teams/export", async (ctx) => {
