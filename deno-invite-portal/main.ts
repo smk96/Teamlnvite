@@ -276,10 +276,49 @@ router.get("/admin", async (ctx) => {
   ctx.response.body = html;
 });
 
+function formatExportDateTime(value: number | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? "" : date.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
 // 2. Admin API - Teams
 router.get("/api/admin/teams", async (ctx) => {
   const teams = await DB.listTeams();
   ctx.response.body = { success: true, teams };
+});
+
+router.get("/api/admin/teams/export", async (ctx) => {
+  const teams = await DB.listTeams();
+  const lines: string[] = [];
+  lines.push("team备注名字\t有效期时间\tteam成员邮箱");
+
+  for (const team of teams) {
+    const createdAt = team.createdAt;
+    const expiresAt = createdAt ? createdAt + 30 * 24 * 3600 * 1000 : undefined;
+    const rangeText = createdAt && expiresAt
+      ? `${formatExportDateTime(createdAt)} - ${formatExportDateTime(expiresAt)}`
+      : "";
+
+    let memberEmailsText = "";
+    try {
+      const members = await fetchTeamMembers(team.accessToken, team.accountId);
+      const emails = (members || [])
+        .map((m: any) => m?.email || m?.email_address || m?.user?.email || m?.user?.email_address || "")
+        .map((e: string) => String(e).trim().toLowerCase())
+        .filter(Boolean);
+      memberEmailsText = emails.join(",");
+    } catch (e) {
+      memberEmailsText = `ERROR: ${e instanceof Error ? e.message : "fetch failed"}`;
+    }
+
+    lines.push(`${team.name}\t${rangeText}\t${memberEmailsText}`);
+  }
+
+  ctx.response.status = 200;
+  ctx.response.headers.set("Content-Type", "text/plain; charset=utf-8");
+  ctx.response.headers.set("Content-Disposition", 'attachment; filename="team列表.txt"');
+  ctx.response.body = lines.join("\n");
 });
 
 router.post("/api/admin/teams", async (ctx) => {
