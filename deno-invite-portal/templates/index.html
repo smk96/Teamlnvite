@@ -70,12 +70,6 @@
                 return;
             }
 
-            // 确认邮箱
-            const confirmMessage = `📧 请确认您的邮箱地址：\n\n${email}\n\n⚠️ 邀请邮件将发送到此邮箱，请仔细核对！`;
-            if (!confirm(confirmMessage)) {
-                return;
-            }
-
             // 禁用按钮状态
             const submitBtn = form.querySelector('button[type="submit"]');
             const originalBtnContent = submitBtn.innerHTML;
@@ -94,14 +88,8 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showMessage(data.message, 'success');
+                    showMessage('✅ 邀请成功！请检查您的邮箱。', 'success');
                     form.reset();
-                    
-                    setTimeout(() => {
-                        if (confirm('✅ 邀请已发送！\n\n是否立即前往 Gmail 查看？')) {
-                            window.open('https://mail.google.com', '_blank');
-                        }
-                    }, 800);
                 } else {
                     showMessage(data.error || '加入失败', 'error');
                 }
