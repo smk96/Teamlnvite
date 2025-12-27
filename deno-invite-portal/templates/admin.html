@@ -5,148 +5,377 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChatGPT Team 管理后台</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --primary: #10a37f;
+            --primary-hover: #1a7f64;
+            --secondary: #6e6e80;
+            --danger: #ef4146;
+            --bg-color: #f7f7f8;
+            --card-bg: #ffffff;
+            --text-main: #202123;
+            --text-secondary: #6e6e80;
+            --border-color: #e5e5e5;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); padding: 40px; }
-        h1 { color: #333; margin-bottom: 30px; font-size: 32px; text-align: center; }
-        h2 { color: #555; margin: 30px 0 20px 0; font-size: 24px; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
-        .section { margin-bottom: 40px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; color: #555; font-weight: 500; }
-        input[type="text"], input[type="email"], input[type="number"], textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: border-color 0.3s; }
-        input[type="text"]:focus, input[type="email"]:focus, input[type="number"]:focus, textarea:focus { outline: none; border-color: #667eea; }
-        input[type="checkbox"] { width: 18px; height: 18px; margin-right: 8px; cursor: pointer; }
-        textarea { min-height: 100px; resize: vertical; font-family: monospace; }
-        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; display: inline-block; }
-        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
-        .btn-secondary { background: #6c757d; color: white; }
-        .btn-secondary:hover { background: #5a6268; }
-        .btn-danger { background: #dc3545; color: white; }
-        .btn-danger:hover { background: #c82333; }
-        .btn-sm { padding: 8px 16px; font-size: 12px; }
-        .teams-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; margin-top: 20px; }
-        .team-card { border: 2px solid #e0e0e0; border-radius: 12px; padding: 20px; transition: all 0.3s; }
-        .team-card:hover { border-color: #667eea; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); }
-        .team-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .team-header h3 { color: #333; font-size: 18px; }
-        .team-info { margin-bottom: 15px; }
-        .team-info p { margin: 8px 0; color: #666; font-size: 14px; }
-        .team-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .badge { display: inline-block; padding: 4px 12px; background: #667eea; color: white; border-radius: 12px; font-size: 12px; font-weight: 600; }
-        .badge-owner { background: #ffc107; }
-        .badge-temp { background: #ff6b6b; }
-        .badge-success { background: #28a745; }
-        .badge-error { background: #dc3545; }
-        code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
-        .key-code { background: #fff3cd; color: #856404; padding: 4px 8px; font-weight: 600; }
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); }
-        .modal-content { background-color: white; margin: 5% auto; padding: 30px; border-radius: 12px; width: 90%; max-width: 800px; max-height: 80vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .close { color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; }
-        .close:hover { color: #000; }
-        .members-list, .keys-list { margin-top: 20px; }
-        .member-item, .key-item { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .member-info, .key-info { flex: 1; }
-        .member-meta, .key-meta { display: flex; gap: 15px; margin-top: 5px; }
-        .log-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .log-table th, .log-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e0e0e0; }
-        .log-table th { background: #f8f9fa; font-weight: 600; color: #333; }
-        .log-table tr:hover { background: #f8f9fa; }
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-main);
+            line-height: 1.5;
+            padding: 20px;
+        }
+
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            padding: 20px 0;
+        }
+
+        .header h1 { 
+            font-size: 24px; 
+            font-weight: 600; 
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+        }
+
+        .card h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        /* Form Elements */
+        .form-group { margin-bottom: 16px; }
+        
+        label { 
+            display: block; 
+            margin-bottom: 6px; 
+            font-size: 14px; 
+            font-weight: 500; 
+            color: var(--text-secondary);
+        }
+
+        input[type="text"], 
+        input[type="email"], 
+        input[type="number"], 
+        textarea { 
+            width: 100%; 
+            padding: 10px 12px; 
+            border: 1px solid var(--border-color); 
+            border-radius: var(--radius-md); 
+            font-size: 14px; 
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        input:focus, textarea:focus { 
+            outline: none; 
+            border-color: var(--primary); 
+            box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1);
+        }
+
+        textarea { min-height: 100px; resize: vertical; font-family: monospace; font-size: 13px; }
+
+        .btn { 
+            padding: 10px 16px; 
+            border: none; 
+            border-radius: var(--radius-md); 
+            font-size: 14px; 
+            font-weight: 500; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            display: inline-flex; 
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        
+        .btn-secondary { background: white; color: var(--text-main); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background: #f9fafb; border-color: #d1d5db; }
+        
+        .btn-danger { background: #fee2e2; color: #991b1b; }
+        .btn-danger:hover { background: #fecaca; }
+        
+        .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+        /* Teams Grid */
+        .teams-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); 
+            gap: 20px; 
+        }
+
+        .team-card { 
+            background: #fff;
+            border: 1px solid var(--border-color); 
+            border-radius: var(--radius-lg); 
+            padding: 20px; 
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .team-card:hover { 
+            border-color: var(--primary); 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
+        }
+
+        .team-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 12px; 
+        }
+
+        .team-header h3 { font-size: 16px; font-weight: 600; }
+
+        .team-info { margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
+        .team-info p { margin-bottom: 4px; display: flex; justify-content: space-between;}
+        
+        .team-actions { 
+            display: flex; 
+            gap: 8px; 
+            padding-top: 16px;
+            border-top: 1px dashed var(--border-color);
+        }
+
+        .badge { 
+            display: inline-block; 
+            padding: 2px 8px; 
+            border-radius: 99px; 
+            font-size: 12px; 
+            font-weight: 500; 
+            background: #f1f5f9;
+            color: #475569;
+        }
+        .badge-success { background: #dcfce7; color: #166534; }
+        .badge-warning { background: #fef9c3; color: #854d0e; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px); }
+        .modal-content { 
+            background-color: white; 
+            margin: 5% auto; 
+            padding: 0; 
+            border-radius: var(--radius-lg); 
+            width: 90%; 
+            max-width: 700px; 
+            max-height: 85vh; 
+            overflow-y: auto; 
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .modal-header { 
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+        
+        .modal-header h2 { font-size: 18px; font-weight: 600; margin: 0; }
+        
+        .close { color: #9ca3af; font-size: 24px; cursor: pointer; transition: color 0.2s; }
+        .close:hover { color: var(--text-main); }
+        
+        .modal-body { padding: 24px; }
+
+        .member-item { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 12px; 
+            border-bottom: 1px solid var(--border-color); 
+        }
+        .member-item:last-child { border-bottom: none; }
+        
+        .member-info strong { display: block; font-size: 14px; color: var(--text-main); }
+        .member-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+        code { 
+            background: #f1f5f9; 
+            padding: 2px 6px; 
+            border-radius: 4px; 
+            font-family: 'Menlo', monospace; 
+            font-size: 12px; 
+            color: #0f172a;
+        }
+        
+        .key-code { cursor: pointer; }
+        .key-code:hover { background: #e2e8f0; }
+
+        /* Checkbox wrapper */
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .checkbox-wrapper input { width: 16px; height: 16px; }
+
+        /* Animation */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .card, .team-card { animation: fadeIn 0.4s ease-out; }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <h1>🎯 ChatGPT Team 管理后台 (Deno Edition)</h1>
-
-        <!-- 添加 Team -->
-        <div class="section">
-            <h2>➕ 添加新 Team</h2>
-            <form id="addTeamForm" onsubmit="addTeam(event)">
-                <div class="form-group">
-                    <label>Team 名称:</label>
-                    <input type="text" name="name" required>
-                </div>
-                <div class="form-group">
-                    <label>Session JSON (从浏览器复制):</label>
-                    <textarea name="session_data" id="sessionDataInput" required placeholder='{"user": {...}, "accessToken": "..."}' rows="6"></textarea>
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <button type="submit" class="btn btn-primary">添加 Team</button>
-                    <button type="button" onclick="getAccountCheckoutLink()" class="btn btn-secondary">🔗 获取账号链接</button>
-                </div>
-            </form>
+        <div class="header">
+            <h1><i class="fa-solid fa-layer-group" style="color: var(--primary);"></i> ChatGPT Team Manager</h1>
+            <div style="font-size: 14px; color: var(--text-secondary);">Deno Edition</div>
         </div>
 
-        <!-- 邀请码管理 -->
-        <div class="section">
-            <h2>🔑 邀请码管理</h2>
-            <div style="margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
-                <div class="form-group" style="margin: 0;">
-                    <label>生成数量:</label>
-                    <input type="number" id="key_count" name="count" value="1" min="1" max="20" style="width: 100px;">
-                </div>
-                <button type="button" class="btn btn-primary" onclick="createKeys(false)">生成一次性邀请码</button>
-                <button type="button" class="btn btn-primary" onclick="createKeys(true)" style="background:#20c997;">生成无限邀请码</button>
+        <div class="grid-layout">
+            <!-- 添加 Team -->
+            <div class="card">
+                <h2><i class="fa-solid fa-plus-circle"></i> 添加新 Team</h2>
+                <form id="addTeamForm" onsubmit="addTeam(event)">
+                    <div class="form-group">
+                        <label>Team 名称</label>
+                        <input type="text" name="name" required placeholder="例如: Team Alpha">
+                    </div>
+                    <div class="form-group">
+                        <label>Session JSON</label>
+                        <textarea name="session_data" id="sessionDataInput" required placeholder='{"user": {...}, "accessToken": "..."}'></textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" class="btn btn-primary" style="flex: 1;"><i class="fa-solid fa-check"></i> 添加 Team</button>
+                        <button type="button" onclick="getAccountCheckoutLink()" class="btn btn-secondary"><i class="fa-solid fa-link"></i> 获取账单链接</button>
+                    </div>
+                </form>
             </div>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button onclick="openNormalKeysModal()" class="btn btn-primary">👁️ 查看一次性邀请码</button>
-                <button onclick="openUnlimitedKeysModal()" class="btn btn-primary" style="background:#20c997;">👁️ 查看无限邀请码</button>
-            </div>
-        </div>
 
-        <!-- Auto-Kick 配置 -->
-        <div class="section">
-            <h2>⚙️ Auto-Kick 配置</h2>
-            <form id="autoKickConfigForm" onsubmit="saveAutoKickConfig(event)">
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="auto_kick_enabled" name="enabled">
-                        启用自动踢人
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>检测间隔 (秒):</label>
-                    <input type="number" id="check_interval" name="check_interval" value="300" min="60">
-                </div>
-                <div class="form-group">
-                    <label>运行时间段 (北京时间):</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="number" id="start_hour" name="start_hour" value="0" min="0" max="23" style="width: 80px;">
-                        <span>时 至</span>
-                        <input type="number" id="end_hour" name="end_hour" value="23" min="0" max="23" style="width: 80px;">
-                        <span>时</span>
+            <!-- Auto-Kick 配置 -->
+            <div class="card">
+                <h2><i class="fa-solid fa-robot"></i> 自动化配置</h2>
+                <form id="autoKickConfigForm" onsubmit="saveAutoKickConfig(event)">
+                    <div class="form-group">
+                        <label class="checkbox-wrapper">
+                            <input type="checkbox" id="auto_kick_enabled" name="enabled">
+                            <span>启用自动踢人</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>检测间隔 (秒)</label>
+                        <input type="number" id="check_interval" name="check_interval" value="300" min="60">
+                    </div>
+                    <div class="form-group">
+                        <label>运行时间段 (北京时间)</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="number" id="start_hour" name="start_hour" value="0" min="0" max="23">
+                            <span style="color: var(--text-secondary); white-space: nowrap;">至</span>
+                            <input type="number" id="end_hour" name="end_hour" value="23" min="0" max="23">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;"><i class="fa-solid fa-save"></i> 保存配置</button>
+                </form>
+            </div>
+            
+            <!-- 邀请码管理 -->
+            <div class="card full-width">
+                <h2><i class="fa-solid fa-key"></i> 邀请码管理</h2>
+                <div style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-between; align-items: flex-end;">
+                    <div style="display: flex; gap: 12px; align-items: flex-end;">
+                        <div class="form-group" style="margin: 0; width: 120px;">
+                            <label>生成数量</label>
+                            <input type="number" id="key_count" name="count" value="1" min="1" max="50">
+                        </div>
+                        <button type="button" class="btn btn-secondary" onclick="createKeys(false)">
+                            <i class="fa-solid fa-ticket"></i> 生成一次性码
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="createKeys(true)">
+                            <i class="fa-solid fa-infinity"></i> 生成无限码
+                        </button>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="openNormalKeysModal()" class="btn btn-secondary">
+                            <i class="fa-solid fa-list"></i> 查看一次性码
+                        </button>
+                        <button onclick="openUnlimitedKeysModal()" class="btn btn-secondary">
+                            <i class="fa-solid fa-list-check"></i> 查看无限码
+                        </button>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary">保存配置</button>
-            </form>
-        </div>
-
-        <!-- Teams 列表 -->
-        <div class="section">
-            <h2>📋 Teams 列表</h2>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button onclick="toggleTeamsList()" class="btn btn-primary" id="toggleTeamsBtn">👁️ 查看Teams</button>
             </div>
-            <div id="teamsList" style="display: none;"></div>
+
+            <!-- Teams 列表 -->
+            <div class="card full-width">
+                <h2>
+                    <i class="fa-solid fa-users"></i> Teams 列表
+                    <button onclick="toggleTeamsList()" class="btn btn-sm btn-secondary" id="toggleTeamsBtn" style="margin-left: auto;">
+                        <i class="fa-regular fa-eye"></i> 刷新列表
+                    </button>
+                </h2>
+                <div id="teamsList" style="display: none;"></div>
+            </div>
         </div>
     </div>
 
+    <!-- Modals -->
     <div id="teamModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="teamModalTitle">👥 Team 成员</h2>
                 <span class="close" onclick="closeTeamModal()">&times;</span>
             </div>
-            <div>
-                <h3>成员列表</h3>
-                <div id="membersList">加载中...</div>
-            </div>
-            <div style="margin-top: 30px;">
-                <h3>待接受邀请</h3>
-                <div id="pendingInvitesList">加载中...</div>
+            <div class="modal-body">
+                <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">成员列表</h3>
+                <div id="membersList" style="background: #f8fafc; border-radius: 8px; border: 1px solid var(--border-color);">加载中...</div>
+                
+                <h3 style="font-size: 14px; color: var(--text-secondary); margin: 24px 0 12px;">待接受邀请</h3>
+                <div id="pendingInvitesList" style="background: #f8fafc; border-radius: 8px; border: 1px solid var(--border-color);">加载中...</div>
             </div>
         </div>
     </div>
@@ -157,10 +386,12 @@
                 <h2>🔑 一次性邀请码</h2>
                 <span class="close" onclick="closeKeysModal()">&times;</span>
             </div>
-            <div style="margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="btn btn-primary btn-sm" onclick="copyKeys(false)">📋 复制全部</button>
+            <div class="modal-body">
+                <div style="margin-bottom: 16px;">
+                    <button class="btn btn-primary btn-sm" onclick="copyKeys(false)"><i class="fa-regular fa-copy"></i> 复制全部</button>
+                </div>
+                <div id="normalKeysList" style="max-height: 400px; overflow-y: auto;">加载中...</div>
             </div>
-            <div id="normalKeysList">加载中...</div>
         </div>
     </div>
 
@@ -170,24 +401,28 @@
                 <h2>♾️ 无限邀请码</h2>
                 <span class="close" onclick="closeKeysModal()">&times;</span>
             </div>
-            <div style="margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="btn btn-primary btn-sm" onclick="copyKeys(true)">📋 复制全部</button>
+            <div class="modal-body">
+                <div style="margin-bottom: 16px;">
+                    <button class="btn btn-primary btn-sm" onclick="copyKeys(true)"><i class="fa-regular fa-copy"></i> 复制全部</button>
+                </div>
+                <div id="unlimitedKeysList">加载中...</div>
             </div>
-            <div id="unlimitedKeysList">加载中...</div>
         </div>
     </div>
 
     <div id="checkoutModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
                 <h2>🔗 付款链接</h2>
                 <span class="close" onclick="closeCheckoutModal()">&times;</span>
             </div>
-            <div class="form-group">
-                <label>付款链接:</label>
-                <input type="text" id="checkoutLinkInput" readonly>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Generated Link</label>
+                    <input type="text" id="checkoutLinkInput" readonly onclick="this.select()">
+                </div>
+                <button class="btn btn-primary" onclick="copyCheckoutLink()" style="width: 100%;"><i class="fa-regular fa-copy"></i> 复制链接</button>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="copyCheckoutLink()">📋 复制链接</button>
         </div>
     </div>
 
@@ -200,15 +435,13 @@
 
         window.onload = function () {
             loadAutoKickConfig();
+            loadTeams(); // Auto load teams on start for better UX
+            teamsLoaded = true;
+            document.getElementById('teamsList').style.display = 'block';
         };
 
-        async function openNormalKeysModal() {
-            await openKeysModal(false);
-        }
-
-        async function openUnlimitedKeysModal() {
-            await openKeysModal(true);
-        }
+        async function openNormalKeysModal() { await openKeysModal(false); }
+        async function openUnlimitedKeysModal() { await openKeysModal(true); }
 
         async function openKeysModal(isUnlimited) {
             if (!keysLoaded) {
@@ -217,7 +450,6 @@
             } else {
                 renderKeysList(isUnlimited);
             }
-
             const modalId = isUnlimited ? 'unlimitedKeysModal' : 'normalKeysModal';
             document.getElementById(modalId).style.display = 'block';
         }
@@ -225,18 +457,18 @@
         function toggleTeamsList() {
             const teamsList = document.getElementById('teamsList');
             const toggleBtn = document.getElementById('toggleTeamsBtn');
-            if (teamsList.style.display === 'none') {
-                teamsList.style.display = 'block';
-                toggleBtn.textContent = '👁️‍🗨️ 隐藏Teams';
-                if (!teamsLoaded) { loadTeams(); teamsLoaded = true; }
-            } else {
-                teamsList.style.display = 'none';
-                toggleBtn.textContent = '👁️ 查看Teams';
-            }
+            // Always refresh
+            loadTeams();
+            teamsList.style.display = 'block';
         }
 
         async function addTeam(e) {
             e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 添加中...';
+            btn.disabled = true;
+
             const formData = new FormData(e.target);
             try {
                 const response = await fetch('/api/admin/teams', {
@@ -257,6 +489,9 @@
                 }
             } catch (error) {
                 alert('请求失败: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         }
 
@@ -276,13 +511,8 @@
         function refreshKeyModals() {
             const normalModal = document.getElementById('normalKeysModal');
             const unlimitedModal = document.getElementById('unlimitedKeysModal');
-
-            if (normalModal.style.display === 'block') {
-                renderKeysList(false);
-            }
-            if (unlimitedModal.style.display === 'block') {
-                renderKeysList(true);
-            }
+            if (normalModal.style.display === 'block') renderKeysList(false);
+            if (unlimitedModal.style.display === 'block') renderKeysList(true);
         }
 
         function renderKeysList(isUnlimited) {
@@ -290,7 +520,7 @@
             const keys = allKeys.filter(k => !!k.isUnlimited === isUnlimited);
 
             if (!keys || keys.length === 0) {
-                container.innerHTML = '<p>暂无邀请码</p>';
+                container.innerHTML = '<p style="text-align:center; color:#999; padding:20px;">暂无邀请码</p>';
                 return;
             }
 
@@ -298,22 +528,20 @@
             keys.forEach(key => {
                 const keyCode = key.code;
                 const usedBadge = isUnlimited
-                    ? `<span class="badge">使用 ${key.usageCount} 次</span>`
-                    : (key.usageCount > 0 ? '<span class="badge badge-error">已使用</span>' : '<span class="badge badge-success">未使用</span>');
+                    ? `<span class="badge badge-warning">已用 ${key.usageCount} 次</span>`
+                    : (key.usageCount > 0 ? '<span class="badge badge-danger">已失效</span>' : '<span class="badge badge-success">有效</span>');
 
                 html += `
-                    <div class="key-item">
-                        <div class="key-info">
-                            <div>
-                                <code class="key-code" onclick="copyKey('${keyCode}')">${keyCode}</code>
-                                <div style="margin-top: 8px;">
-                                    ${isUnlimited ? '<span class="badge" style="background:#20c997;">无限</span>' : '<span class="badge">一次性</span>'}
-                                    ${usedBadge}
-                                </div>
+                    <div class="member-item">
+                        <div class="member-info">
+                            <code class="key-code" onclick="copyKey('${keyCode}')">${keyCode}</code>
+                            <div class="member-meta">
+                                ${usedBadge}
+                                ${key.isTemp ? '<span class="badge">临时</span>' : ''}
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            ${isUnlimited ? `<button class="btn btn-danger btn-sm" onclick="deleteKey('${keyCode}')">删除</button>` : ''}
+                            ${isUnlimited ? `<button class="btn btn-danger btn-sm" onclick="deleteKey('${keyCode}')"><i class="fa-solid fa-trash"></i></button>` : ''}
                         </div>
                     </div>
                 `;
@@ -332,8 +560,9 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert(`✅ 成功生成 ${count} 个邀请码！`);
                     await loadKeys();
+                    if(isUnlimited) openUnlimitedKeysModal();
+                    else openNormalKeysModal();
                 } else {
                     alert('错误: ' + data.error);
                 }
@@ -357,6 +586,10 @@
 
         async function saveAutoKickConfig(e) {
             e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 保存中...';
+
             const config = {
                 enabled: document.getElementById('auto_kick_enabled').checked,
                 check_interval: parseInt(document.getElementById('check_interval').value),
@@ -370,12 +603,18 @@
                     body: JSON.stringify(config)
                 });
                 const data = await response.json();
-                if (data.success) alert('配置保存成功！');
+                if (data.success) {
+                    // visual feedback
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> 已保存';
+                    setTimeout(() => btn.innerHTML = originalText, 2000);
+                }
                 else alert('错误: ' + data.error);
             } catch (error) { alert('请求失败: ' + error.message); }
         }
 
         async function loadTeams() {
+            const container = document.getElementById('teamsList');
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>';
             try {
                 const response = await fetch('/api/admin/teams');
                 const data = await response.json();
@@ -386,7 +625,7 @@
         function formatDateTime(value) {
             if (!value) return '-';
             const date = new Date(value);
-            return isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN');
+            return isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
         }
 
         function addDays(ts, days) {
@@ -399,27 +638,28 @@
 
         function displayTeams(teams) {
             const container = document.getElementById('teamsList');
-            if (teams.length === 0) { container.innerHTML = '<p>暂无 Team</p>'; return; }
+            if (teams.length === 0) { container.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">暂无 Team</p>'; return; }
             let html = '<div class="teams-grid">';
             teams.forEach(team => {
                 const createdAt = team.createdAt || team.created_at || team.created;
                 const expiresAt = addDays(createdAt, 30);
                 const rangeText = `${formatDateTime(createdAt)} - ${formatDateTime(expiresAt)}`;
+                const isExpired = team.tokenStatus === 'expired';
 
                 html += `
-                    <div class="team-card">
+                    <div class="team-card" style="${isExpired ? 'border-color:var(--danger); background:#fff5f5;' : ''}">
                         <div class="team-header">
                             <h3>${team.name}</h3>
-                            <button type="button" class="badge" onclick="showTeamModal('${team.id}', '${team.name}')">${team.memberCount || 0}/4 人</button>
+                            <button type="button" class="badge" onclick="showTeamModal('${team.id}', '${team.name}')">${team.memberCount || 0}/4</button>
                         </div>
                         <div class="team-info">
-                            <p><strong>Account ID:</strong> <code>${team.accountId}</code></p>
-                            <p><strong>状态:</strong> ${team.tokenStatus}</p>
-                            <p><strong>时间范围:</strong> ${rangeText}</p>
+                            <p><span>ID</span> <code>${team.accountId.substring(0, 18)}...</code></p>
+                            <p><span>状态</span> <span class="badge ${isExpired ? 'badge-danger' : 'badge-success'}">${team.tokenStatus}</span></p>
+                            <p><span>有效期</span> <span>${rangeText}</span></p>
                         </div>
                         <div class="team-actions">
-                            <button onclick="showTeamModal('${team.id}', '${team.name}')" class="btn btn-primary btn-sm">👥 成员/邀请</button>
-                            <button onclick="deleteTeam('${team.id}')" class="btn btn-danger btn-sm">🗑️ 删除</button>
+                            <button onclick="showTeamModal('${team.id}', '${team.name}')" class="btn btn-secondary btn-sm" style="flex:1"><i class="fa-solid fa-users-gear"></i> 管理</button>
+                            <button onclick="deleteTeam('${team.id}')" class="btn btn-danger btn-sm"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
                 `;
@@ -433,15 +673,12 @@
             try {
                 const response = await fetch(`/api/admin/teams/${teamId}`, { method: 'DELETE' });
                 const data = await response.json();
-                if (data.success) { alert('Team 删除成功！'); loadTeams(); }
+                if (data.success) { loadTeams(); }
                 else alert('错误: ' + data.error);
             } catch (error) { alert('请求失败: ' + error.message); }
         }
 
-        function closeTeamModal() {
-            document.getElementById('teamModal').style.display = 'none';
-        }
-
+        function closeTeamModal() { document.getElementById('teamModal').style.display = 'none'; }
         function closeKeysModal() {
             document.getElementById('normalKeysModal').style.display = 'none';
             document.getElementById('unlimitedKeysModal').style.display = 'none';
@@ -450,7 +687,7 @@
         async function showTeamModal(teamId, teamName) {
             currentTeamId = teamId;
             currentTeamName = teamName;
-            document.getElementById('teamModalTitle').textContent = `👥 ${teamName} - 成员与邀请`;
+            document.getElementById('teamModalTitle').textContent = `👥 ${teamName}`;
             document.getElementById('teamModal').style.display = 'block';
             await loadMembers(teamId);
             await loadPendingInvites(teamId);
@@ -458,43 +695,41 @@
 
         async function loadMembers(teamId) {
             const container = document.getElementById('membersList');
-            container.innerHTML = '加载中...';
+            container.innerHTML = '<div style="padding:10px; color:#999; text-align:center;">加载中...</div>';
             try {
                 const response = await fetch(`/api/admin/teams/${teamId}/members`);
                 const data = await response.json();
                 if (data.success) {
                     displayMembers(data.members || []);
                 } else {
-                    container.innerHTML = '加载失败: ' + data.error;
+                    container.innerHTML = `<div style="padding:10px; color:var(--danger);">加载失败: ${data.error}</div>`;
                 }
             } catch (error) {
-                container.innerHTML = '加载失败: ' + error.message;
+                container.innerHTML = `<div style="padding:10px; color:var(--danger);">加载失败: ${error.message}</div>`;
             }
         }
 
         function displayMembers(members) {
             const container = document.getElementById('membersList');
             if (!members.length) {
-                container.innerHTML = '<p>暂无成员</p>';
+                container.innerHTML = '<p style="padding:10px; text-align:center; color:#999;">暂无成员</p>';
                 return;
             }
 
-            let html = '<div class="members-list">';
+            let html = '<div>';
             members.forEach(member => {
                 const isOwner = member.role === 'account-owner';
                 const joinedAt = member.joined_at ? new Date(member.joined_at).toLocaleString('zh-CN') : '-';
                 html += `
                     <div class="member-item">
                         <div class="member-info">
-                            <div>
-                                <strong>${member.email || member.name || 'Unknown'}</strong>
-                                <span class="badge ${isOwner ? 'badge-owner' : ''}">${isOwner ? '所有者' : '成员'}</span>
-                            </div>
+                            <strong>${member.email || member.name || 'Unknown'}</strong>
                             <div class="member-meta">
-                                <small>加入时间: ${joinedAt}</small>
+                                <span class="badge ${isOwner ? 'badge-warning' : ''}" style="font-size:10px;">${isOwner ? 'OWNER' : 'MEMBER'}</span>
+                                加入: ${joinedAt}
                             </div>
                         </div>
-                        ${!isOwner ? `<button onclick="kickMember('${member.user_id || member.id}', '${member.email || ''}')" class="btn btn-danger btn-sm">🚫 踢出</button>` : ''}
+                        ${!isOwner ? `<button onclick="kickMember('${member.user_id || member.id}', '${member.email || ''}')" class="btn btn-danger btn-sm" title="踢出"><i class="fa-solid fa-user-xmark"></i></button>` : ''}
                     </div>
                 `;
             });
@@ -512,9 +747,9 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('成员已踢出');
                     await loadMembers(currentTeamId);
-                    await loadTeams();
+                    // refresh teams list to update count
+                    loadTeams();
                 } else {
                     alert('错误: ' + data.error);
                 }
@@ -525,43 +760,39 @@
 
         async function loadPendingInvites(teamId) {
             const container = document.getElementById('pendingInvitesList');
-            container.innerHTML = '加载中...';
+            container.innerHTML = '<div style="padding:10px; color:#999; text-align:center;">加载中...</div>';
             try {
                 const response = await fetch(`/api/admin/teams/${teamId}/pending-invites`);
                 const data = await response.json();
                 if (data.success) {
                     displayPendingInvites(data.invites || []);
                 } else {
-                    container.innerHTML = '加载失败: ' + data.error;
+                    container.innerHTML = `<div style="padding:10px; color:var(--danger);">加载失败: ${data.error}</div>`;
                 }
             } catch (error) {
-                container.innerHTML = '加载失败: ' + error.message;
+                container.innerHTML = `<div style="padding:10px; color:var(--danger);">加载失败: ${error.message}</div>`;
             }
         }
 
         function displayPendingInvites(invites) {
             const container = document.getElementById('pendingInvitesList');
             if (!invites.length) {
-                container.innerHTML = '<p>暂无待接受邀请</p>';
+                container.innerHTML = '<p style="padding:10px; text-align:center; color:#999;">暂无待接受邀请</p>';
                 return;
             }
 
-            let html = '<div class="members-list">';
+            let html = '<div>';
             invites.forEach(inv => {
                 const invitedAt = inv.created_at ? new Date(inv.created_at).toLocaleString('zh-CN') : '-';
                 html += `
                     <div class="member-item">
                         <div class="member-info">
-                            <div>
-                                <strong>${inv.email_address || inv.email || 'Unknown'}</strong>
-                                <span class="badge">待接受</span>
-                            </div>
+                            <strong>${inv.email_address || inv.email || 'Unknown'}</strong>
                             <div class="member-meta">
-                                <small>邀请时间: ${invitedAt}</small>
-                                <small>Invite ID: ${inv.id || inv.invite_id || '-'}</small>
+                                邀请于: ${invitedAt}
                             </div>
                         </div>
-                        <button onclick="revokeInvite('${inv.id || inv.invite_id}')" class="btn btn-danger btn-sm">撤销邀请</button>
+                        <button onclick="revokeInvite('${inv.id || inv.invite_id}')" class="btn btn-danger btn-sm" title="撤销"><i class="fa-solid fa-rotate-left"></i></button>
                     </div>
                 `;
             });
@@ -577,7 +808,6 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('邀请已撤销');
                     await loadPendingInvites(currentTeamId);
                 } else {
                     alert('错误: ' + data.error);
@@ -595,7 +825,7 @@
             }
 
             try {
-                const res = await fetch("/api/admin/checkout-link", {
+                const res = await fetch("/api/admin/checkout-link", { 
                     method: "POST",
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ session_data: sessionData })
@@ -644,13 +874,20 @@
                 const response = await fetch(`/api/admin/keys/${encodeURIComponent(code)}`, { method: 'DELETE' });
                 const data = await response.json();
                 if (data.success) {
-                    alert('已删除');
                     await loadKeys();
+                    openUnlimitedKeysModal(); // refresh view
                 } else {
                     alert('错误: ' + data.error);
                 }
             } catch (error) {
                 alert('请求失败: ' + error.message);
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = "none";
             }
         }
     </script>
