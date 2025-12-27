@@ -354,9 +354,14 @@
             <div class="card full-width">
                 <h2>
                     <i class="fa-solid fa-users"></i> Teams 列表
-                    <button onclick="toggleTeamsList()" class="btn btn-sm btn-secondary" id="toggleTeamsBtn" style="margin-left: auto;">
-                        <i class="fa-regular fa-eye"></i> 刷新列表
-                    </button>
+                    <div style="margin-left: auto; display: flex; gap: 8px;">
+                        <button onclick="exportTeamsTxt()" class="btn btn-sm btn-secondary">
+                            <i class="fa-regular fa-file-lines"></i> 导出 TXT
+                        </button>
+                        <button onclick="toggleTeamsList()" class="btn btn-sm btn-secondary" id="toggleTeamsBtn">
+                            <i class="fa-regular fa-eye"></i> 刷新列表
+                        </button>
+                    </div>
                 </h2>
                 <div id="teamsList" style="display: none;"></div>
             </div>
@@ -980,6 +985,10 @@
             } catch (error) {
                 alert("发生错误：" + error);
             }
+        }
+
+        function exportTeamsTxt() {
+            window.location.href = '/api/admin/teams/export';
         }
 
         function showCheckoutModal(url) {
