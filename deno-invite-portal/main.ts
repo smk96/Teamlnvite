@@ -317,7 +317,11 @@ router.get("/api/admin/teams/export", async (ctx) => {
 
   ctx.response.status = 200;
   ctx.response.headers.set("Content-Type", "text/plain; charset=utf-8");
-  ctx.response.headers.set("Content-Disposition", 'attachment; filename="team列表.txt"');
+  // Use ASCII filename plus RFC 5987 for UTF-8 to avoid ByteString errors.
+  ctx.response.headers.set(
+    "Content-Disposition",
+    "attachment; filename=\"team-list.txt\"; filename*=UTF-8''team%E5%88%97%E8%A1%A8.txt"
+  );
   ctx.response.body = lines.join("\n");
 });
 
