@@ -761,31 +761,59 @@
             let errors = [];
 
             try {
-                // Send invites in parallel.
-                const promises = emails.map(email =>
-                    fetch(`/api/admin/teams/${currentTeamId}/invite`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email })
-                    }).then(async res => {
-                        const text = await res.text();
-                        const data = parseJsonSafe(text);
-                        const ok = data ? !!data.success : res.ok;
+                // Prefer batch API
+                const batchRes = await fetch(`/api/admin/teams/${currentTeamId}/invites`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ emails })
+                });
 
-                        if (ok) {
-                            successCount++;
-                        } else {
+                if (batchRes.status !== 404) {
+                    const text = await batchRes.text();
+                    const data = parseJsonSafe(text);
+                    const ok = data ? !!data.success : batchRes.ok;
+
+                    if (data?.results && Array.isArray(data.results)) {
+                        data.results.forEach(r => {
+                            if (r.success) successCount++;
+                            else {
+                                failCount++;
+                                errors.push(`${r.email}: ${r.error || 'Invite failed'}`);
+                            }
+                        });
+                    } else if (ok) {
+                        successCount = emails.length;
+                    } else {
+                        failCount = emails.length;
+                        errors = emails.map(e => `${e}: ${data?.error || (text || `HTTP ${batchRes.status}`)}`);
+                    }
+                } else {
+                    // Fallback to single-invite API for older deployments
+                    const promises = emails.map(email =>
+                        fetch(`/api/admin/teams/${currentTeamId}/invite`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email })
+                        }).then(async res => {
+                            const text = await res.text();
+                            const data = parseJsonSafe(text);
+                            const ok = data ? !!data.success : res.ok;
+
+                            if (ok) {
+                                successCount++;
+                            } else {
+                                failCount++;
+                                const errMsg = data?.error || (text ? text : `HTTP ${res.status}`);
+                                errors.push(`${email}: ${errMsg}`);
+                            }
+                        }).catch(err => {
                             failCount++;
-                            const errMsg = data?.error || (text ? text : `HTTP ${res.status}`);
-                            errors.push(`${email}: ${errMsg}`);
-                        }
-                    }).catch(err => {
-                        failCount++;
-                        errors.push(`${email}: ${err.message}`);
-                    })
-                );
+                            errors.push(`${email}: ${err.message}`);
+                        })
+                    );
 
-                await Promise.all(promises);
+                    await Promise.all(promises);
+                }
 
                 if (successCount > 0) {
                     closeInviteModal();
