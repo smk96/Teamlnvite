@@ -373,7 +373,7 @@
             <div class="modal-body">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <h3 style="font-size: 14px; color: var(--text-secondary); margin: 0;">成员列表</h3>
-                    <button onclick="promptInviteMember()" class="btn btn-primary btn-sm" style="padding: 4px 10px; font-size: 12px;">
+                    <button onclick="openInviteModal()" class="btn btn-primary btn-sm" style="padding: 4px 10px; font-size: 12px;">
                         <i class="fa-solid fa-paper-plane"></i> 直接邀请
                     </button>
                 </div>
@@ -427,6 +427,24 @@
                     <input type="text" id="checkoutLinkInput" readonly onclick="this.select()">
                 </div>
                 <button class="btn btn-primary" onclick="copyCheckoutLink()" style="width: 100%;"><i class="fa-regular fa-copy"></i> 复制链接</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="inviteModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-paper-plane"></i> 邀请新成员</h2>
+                <span class="close" onclick="closeInviteModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form onsubmit="submitInvite(event)">
+                    <div class="form-group">
+                        <label>邮箱地址 (多个邮箱请用逗号分隔)</label>
+                        <textarea id="inviteEmailInput" required placeholder="name@example.com, other@example.com" style="width: 100%; min-height: 80px;"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">发送邀请</button>
+                </form>
             </div>
         </div>
     </div>
@@ -687,6 +705,7 @@
         function closeKeysModal() {
             document.getElementById('normalKeysModal').style.display = 'none';
             document.getElementById('unlimitedKeysModal').style.display = 'none';
+            document.getElementById('inviteModal').style.display = 'none';
         }
 
         async function showTeamModal(teamId, teamName) {
@@ -698,30 +717,78 @@
             await loadPendingInvites(teamId);
         }
 
-        async function promptInviteMember() {
-            const email = prompt("请输入要邀请的邮箱地址:");
-            if (!email) return;
+        function openInviteModal() {
+            document.getElementById('inviteEmailInput').value = '';
+            document.getElementById('inviteModal').style.display = 'block';
+            setTimeout(() => document.getElementById('inviteEmailInput').focus(), 100);
+        }
+
+        function closeInviteModal() {
+            document.getElementById('inviteModal').style.display = 'none';
+        }
+
+        async function submitInvite(e) {
+            e.preventDefault();
+            const emailInput = document.getElementById('inviteEmailInput');
+            const rawEmails = emailInput.value;
+            const btn = e.target.querySelector('button');
+            const originalText = btn.innerHTML;
             
-            if (!email.includes('@')) {
+            if (!rawEmails) return;
+
+            // Split by comma, trim whitespace, and filter empty strings
+            const emails = rawEmails.split(/[,，\n]/).map(e => e.trim()).filter(e => e);
+
+            if (emails.length === 0) {
                 alert("请输入有效的邮箱地址");
                 return;
             }
 
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 发送中...';
+            btn.disabled = true;
+
+            let successCount = 0;
+            let failCount = 0;
+            let errors = [];
+
             try {
-                const response = await fetch(`/api/admin/teams/${currentTeamId}/invite`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    alert("邀请已发送！");
+                // Send invites sequentially or in parallel. Parallel is faster.
+                const promises = emails.map(email =>
+                    fetch(`/api/admin/teams/${currentTeamId}/invite`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email })
+                    }).then(async res => {
+                        const data = await res.json();
+                        if (data.success) successCount++;
+                        else {
+                            failCount++;
+                            errors.push(`${email}: ${data.error}`);
+                        }
+                    }).catch(err => {
+                        failCount++;
+                        errors.push(`${email}: ${err.message}`);
+                    })
+                );
+
+                await Promise.all(promises);
+
+                if (successCount > 0) {
+                    closeInviteModal();
                     await loadPendingInvites(currentTeamId);
-                } else {
-                    alert("邀请失败: " + data.error);
                 }
+
+                if (failCount === 0) {
+                    alert(`成功发送 ${successCount} 个邀请！`);
+                } else {
+                    alert(`发送完成。\n成功: ${successCount}\n失败: ${failCount}\n\n错误详情:\n${errors.join('\n')}`);
+                }
+
             } catch (error) {
                 alert("请求出错: " + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         }
 
