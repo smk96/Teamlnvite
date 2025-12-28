@@ -960,7 +960,7 @@
                 const response = await fetch(`/api/admin/teams/${currentTeamId}/pending-invites/${decodedInviteId}`, {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: decodedEmail || '' })
+                    body: JSON.stringify({ email_address: decodedEmail || '', email: decodedEmail || '' })
                 });
                 const data = await response.json();
                 if (data.success) {
