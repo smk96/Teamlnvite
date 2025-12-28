@@ -930,15 +930,17 @@
             let html = '<div>';
             invites.forEach(inv => {
                 const invitedAt = inv.created_at ? new Date(inv.created_at).toLocaleString('zh-CN') : '-';
+                const inviteId = inv.invite_id || inv.inviteId || inv.invitation_id || inv.id || '';
+                const inviteEmail = inv.email_address || inv.email || '';
                 html += `
                     <div class="member-item">
                         <div class="member-info">
-                            <strong>${inv.email_address || inv.email || 'Unknown'}</strong>
+                            <strong>${inviteEmail || 'Unknown'}</strong>
                             <div class="member-meta">
                                 邀请于: ${invitedAt}
                             </div>
                         </div>
-                        <button onclick="revokeInvite('${inv.id || inv.invite_id}')" class="btn btn-danger btn-sm" title="撤销"><i class="fa-solid fa-rotate-left"></i></button>
+                        <button onclick="revokeInvite('${encodeURIComponent(inviteId)}','${encodeURIComponent(inviteEmail)}')" class="btn btn-danger btn-sm" title="撤销"><i class="fa-solid fa-rotate-left"></i></button>
                     </div>
                 `;
             });
@@ -946,11 +948,19 @@
             container.innerHTML = html;
         }
 
-        async function revokeInvite(inviteId) {
+        async function revokeInvite(inviteId, email) {
+            const decodedInviteId = decodeURIComponent(inviteId || '');
+            const decodedEmail = decodeURIComponent(email || '');
+            if (!decodedInviteId) {
+                alert('撤销失败：缺少邀请 ID');
+                return;
+            }
             if (!confirm('确定要撤销该邀请吗？')) return;
             try {
-                const response = await fetch(`/api/admin/teams/${currentTeamId}/pending-invites/${inviteId}`, {
-                    method: 'DELETE'
+                const response = await fetch(`/api/admin/teams/${currentTeamId}/pending-invites/${decodedInviteId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: decodedEmail || '' })
                 });
                 const data = await response.json();
                 if (data.success) {
