@@ -286,7 +286,8 @@ function generateKeyCode(bytes = 32) {
   const buf = new Uint8Array(bytes);
   crypto.getRandomValues(buf);
   const base64 = btoa(String.fromCharCode(...buf));
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  const code = base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return `tx${code}`;
 }
 
 // 2. Admin API - Teams
