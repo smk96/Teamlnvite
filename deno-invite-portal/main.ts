@@ -148,6 +148,10 @@ async function inviteToTeam(accessToken: string, accountId: string, email: strin
   return await res.json();
 }
 
+function getInviteId(invite: any) {
+  return invite?.invite_id || invite?.inviteId || invite?.invitation_id || invite?.id || "";
+}
+
 async function fetchPendingInvites(accessToken: string, accountId: string) {
   const url = `https://chatgpt.com/backend-api/accounts/${accountId}/invites`;
   const headers = {
@@ -501,12 +505,43 @@ router.delete("/api/admin/teams/:id/pending-invites/:inviteId", async (ctx) => {
     return;
   }
 
+  let email = "";
+  try {
+    if (ctx.request.hasBody) {
+      const body = await ctx.request.body.json();
+      email = String(body?.email || "").trim().toLowerCase();
+    }
+  } catch {
+    // ignore body parse errors
+  }
+
   try {
     await revokeInvite(team.accessToken, team.accountId, ctx.params.inviteId);
     ctx.response.body = { success: true };
   } catch (e) {
+    const message = e instanceof Error ? e.message : "Revoke failed";
+    if (message.includes("404") && email) {
+      try {
+        const invites = await fetchPendingInvites(team.accessToken, team.accountId);
+        const match = (invites || []).find((inv: any) => {
+          const invEmail = String(inv?.email_address || inv?.email || "").trim().toLowerCase();
+          return invEmail === email;
+        });
+        const resolvedId = match ? getInviteId(match) : "";
+        if (resolvedId && resolvedId !== ctx.params.inviteId) {
+          await revokeInvite(team.accessToken, team.accountId, resolvedId);
+          ctx.response.body = { success: true };
+          return;
+        }
+      } catch (retryError) {
+        const retryMessage = retryError instanceof Error ? retryError.message : "Revoke failed";
+        ctx.response.status = 500;
+        ctx.response.body = { success: false, error: retryMessage };
+        return;
+      }
+    }
     ctx.response.status = 500;
-    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Revoke failed" };
+    ctx.response.body = { success: false, error: message };
   }
 });
 
