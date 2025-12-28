@@ -171,8 +171,9 @@ async function fetchPendingInvites(accessToken: string, accountId: string) {
   return data.items || [];
 }
 
-async function revokeInvite(accessToken: string, accountId: string, inviteId: string) {
-  const baseUrl = `https://chatgpt.com/backend-api/accounts/${accountId}/invites/${inviteId}`;
+async function revokeInvite(accessToken: string, accountId: string, inviteId: string, emailAddress?: string) {
+  const baseBase = `https://chatgpt.com/backend-api/accounts/${accountId}/invites`;
+  const baseUrl = `${baseBase}/${inviteId}`;
   const headers = {
     "accept": "*/*",
     "authorization": `Bearer ${accessToken}`,
@@ -182,9 +183,10 @@ async function revokeInvite(accessToken: string, accountId: string, inviteId: st
   };
 
   const attempts = [
+    ...(emailAddress ? [{ url: baseBase, method: "DELETE", body: JSON.stringify({ email_address: emailAddress }) }] : []),
     { url: baseUrl, method: "DELETE" },
-    { url: `${baseUrl}/revoke`, method: "POST" },
-    { url: `${baseUrl}/cancel`, method: "POST" }
+    { url: `${baseUrl}/revoke`, method: "POST", body: "{}" },
+    { url: `${baseUrl}/cancel`, method: "POST", body: "{}" }
   ];
 
   let lastStatus = 0;
@@ -193,7 +195,7 @@ async function revokeInvite(accessToken: string, accountId: string, inviteId: st
     const res = await fetch(attempt.url, {
       method: attempt.method,
       headers,
-      body: attempt.method === "POST" ? "{}" : undefined
+      body: attempt.body
     });
 
     if (res.status === 200 || res.status === 204) {
@@ -509,14 +511,14 @@ router.delete("/api/admin/teams/:id/pending-invites/:inviteId", async (ctx) => {
   try {
     if (ctx.request.hasBody) {
       const body = await ctx.request.body.json();
-      email = String(body?.email || "").trim().toLowerCase();
+      email = String(body?.email_address || body?.email || "").trim().toLowerCase();
     }
   } catch {
     // ignore body parse errors
   }
 
   try {
-    await revokeInvite(team.accessToken, team.accountId, ctx.params.inviteId);
+    await revokeInvite(team.accessToken, team.accountId, ctx.params.inviteId, email || undefined);
     ctx.response.body = { success: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Revoke failed";
@@ -529,7 +531,7 @@ router.delete("/api/admin/teams/:id/pending-invites/:inviteId", async (ctx) => {
         });
         const resolvedId = match ? getInviteId(match) : "";
         if (resolvedId && resolvedId !== ctx.params.inviteId) {
-          await revokeInvite(team.accessToken, team.accountId, resolvedId);
+          await revokeInvite(team.accessToken, team.accountId, resolvedId, email);
           ctx.response.body = { success: true };
           return;
         }
