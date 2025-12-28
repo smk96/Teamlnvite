@@ -282,7 +282,7 @@ function formatExportDateTime(value: number | undefined) {
   return isNaN(date.getTime()) ? "" : date.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-function generateKeyCode(bytes = 24) {
+function generateKeyCode(bytes = 32) {
   const buf = new Uint8Array(bytes);
   crypto.getRandomValues(buf);
   const base64 = btoa(String.fromCharCode(...buf));
@@ -605,7 +605,7 @@ router.post("/api/admin/keys", async (ctx) => {
   const createdKeys: any[] = [];
 
   for (let i = 0; i < (count || 1); i++) {
-    const code = generateKeyCode(24);
+    const code = generateKeyCode(32);
     const key = await DB.createAccessKey({
       code,
       isTemp: false,
