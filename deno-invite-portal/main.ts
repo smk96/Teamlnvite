@@ -282,6 +282,13 @@ function formatExportDateTime(value: number | undefined) {
   return isNaN(date.getTime()) ? "" : date.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+function generateKeyCode(bytes = 24) {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  const base64 = btoa(String.fromCharCode(...buf));
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 // 2. Admin API - Teams
 router.get("/api/admin/teams", async (ctx) => {
   const teams = await DB.listTeams();
@@ -598,8 +605,7 @@ router.post("/api/admin/keys", async (ctx) => {
   const createdKeys: any[] = [];
 
   for (let i = 0; i < (count || 1); i++) {
-    // Generate random code
-    const code = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
+    const code = generateKeyCode(24);
     const key = await DB.createAccessKey({
       code,
       isTemp: false,
