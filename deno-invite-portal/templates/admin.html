@@ -721,13 +721,7 @@
                 const isExpired = team.tokenStatus === 'expired';
                 const tokenUpdatedAt = team.tokenUpdatedAt || team.updatedAt || team.createdAt;
                 const tokenAgeDays = tokenUpdatedAt ? Math.floor((Date.now() - tokenUpdatedAt) / 86400000) : null;
-                const tokenAgeText = tokenUpdatedAt ? `${formatDateTime(tokenUpdatedAt)} (${tokenAgeDays}天前)` : '-';
                 const tokenNeedsRefresh = !isExpired && (tokenAgeDays === null || tokenAgeDays >= TOKEN_REFRESH_DAYS);
-                const tokenBadgeClass = tokenNeedsRefresh ? 'badge-warning' : 'badge-success';
-                const tokenBadgeText = tokenNeedsRefresh ? '建议更新' : '正常';
-                const tokenHintRow = isExpired
-                    ? ''
-                    : `<p><span>Token提示</span> <span class="badge ${tokenBadgeClass}">${tokenBadgeText}</span></p>`;
 
                 if (isExpired) expiredCount++;
                 else if (tokenNeedsRefresh) refreshCount++;
@@ -746,8 +740,6 @@
                         <div class="team-info">
                             <p><span>ID</span> <code>${team.accountId.substring(0, 18)}...</code></p>
                             <p><span>状态</span> <span class="badge ${isExpired ? 'badge-danger' : 'badge-success'}">${team.tokenStatus}</span></p>
-                            <p><span>Token更新</span> <span>${tokenAgeText}</span></p>
-                            ${tokenHintRow}
                             <p><span>有效期</span> <span>${rangeText}</span></p>
                         </div>
                         <div class="team-actions">
