@@ -172,13 +172,16 @@
         }
 
         .team-header h3 { font-size: 16px; font-weight: 600; }
+        .team-title { display: flex; align-items: center; gap: 8px; }
+        .team-title .btn { padding: 4px 8px; }
 
         .team-info { margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
         .team-info p { margin-bottom: 4px; display: flex; justify-content: space-between;}
         
-        .team-actions { 
-            display: flex; 
-            gap: 8px; 
+        .team-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
             padding-top: 16px;
             border-top: 1px dashed var(--border-color);
         }
@@ -195,6 +198,17 @@
         .badge-success { background: #dcfce7; color: #166534; }
         .badge-warning { background: #fef9c3; color: #854d0e; }
         .badge-danger { background: #fee2e2; color: #991b1b; }
+
+        .token-reminder {
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            color: #9a3412;
+            padding: 10px 12px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+        .token-reminder strong { font-weight: 600; }
 
         /* Modal */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px); }
@@ -363,6 +377,7 @@
                         </button>
                     </div>
                 </h2>
+                <div id="tokenReminder" class="token-reminder" style="display: none;"></div>
                 <div id="teamsList" style="display: none;"></div>
             </div>
         </div>
@@ -454,12 +469,36 @@
         </div>
     </div>
 
+    <div id="updateTokenModal" class="modal">
+        <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-arrows-rotate"></i> 更新 Team Token</h2>
+                <span class="close" onclick="closeUpdateTokenModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Team 名称</label>
+                    <input type="text" id="updateTokenTeamName" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Session JSON</label>
+                    <textarea id="updateTokenSessionInput" placeholder='{"user": {...}, "accessToken": "..."}' style="width: 100%; min-height: 140px;"></textarea>
+                    <div class="member-meta" style="margin-top: 6px;">提示：Token 通常 3-7 天失效，建议每 3-5 天手动更新。</div>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="submitUpdateToken()" style="width: 100%;">保存 Token</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let allKeys = [];
         let teamsLoaded = false;
         let keysLoaded = false;
         let currentTeamId = null;
         let currentTeamName = "";
+        let updatingTeamId = null;
+        let updatingTeamName = "";
+        const TOKEN_REFRESH_DAYS = 5;
 
         window.onload = function () {
             loadAutoKickConfig();
@@ -666,27 +705,51 @@
 
         function displayTeams(teams) {
             const container = document.getElementById('teamsList');
-            if (teams.length === 0) { container.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">暂无 Team</p>'; return; }
+            const reminder = document.getElementById('tokenReminder');
+            if (teams.length === 0) {
+                container.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">暂无 Team</p>';
+                if (reminder) reminder.style.display = 'none';
+                return;
+            }
             let html = '<div class="teams-grid">';
+            let expiredCount = 0;
+            let refreshCount = 0;
             teams.forEach(team => {
                 const createdAt = team.createdAt || team.created_at || team.created;
                 const expiresAt = addDays(createdAt, 30);
                 const rangeText = `${formatDateTime(createdAt)} - ${formatDateTime(expiresAt)}`;
                 const isExpired = team.tokenStatus === 'expired';
+                const tokenUpdatedAt = team.tokenUpdatedAt || team.updatedAt || team.createdAt;
+                const tokenAgeDays = tokenUpdatedAt ? Math.floor((Date.now() - tokenUpdatedAt) / 86400000) : null;
+                const tokenAgeText = tokenUpdatedAt ? `${formatDateTime(tokenUpdatedAt)} (${tokenAgeDays}天前)` : '-';
+                const tokenNeedsRefresh = tokenAgeDays === null || tokenAgeDays >= TOKEN_REFRESH_DAYS;
+                const tokenBadgeClass = isExpired ? 'badge-danger' : (tokenNeedsRefresh ? 'badge-warning' : 'badge-success');
+                const tokenBadgeText = isExpired ? '已过期' : (tokenNeedsRefresh ? '建议更新' : '正常');
+
+                if (isExpired) expiredCount++;
+                else if (tokenNeedsRefresh) refreshCount++;
 
                 html += `
                     <div class="team-card" style="${isExpired ? 'border-color:var(--danger); background:#fff5f5;' : ''}">
                         <div class="team-header">
-                            <h3>${team.name}</h3>
+                            <div class="team-title">
+                                <h3>${team.name}</h3>
+                                <button class="btn btn-secondary btn-sm" onclick="renameTeam('${team.id}', '${team.name}')" title="修改名称">
+                                    <i class="fa-solid fa-pen"></i>
+                                </button>
+                            </div>
                             <button type="button" class="badge" onclick="showTeamModal('${team.id}', '${team.name}')">${team.memberCount || 0}/4</button>
                         </div>
                         <div class="team-info">
                             <p><span>ID</span> <code>${team.accountId.substring(0, 18)}...</code></p>
                             <p><span>状态</span> <span class="badge ${isExpired ? 'badge-danger' : 'badge-success'}">${team.tokenStatus}</span></p>
+                            <p><span>Token更新</span> <span>${tokenAgeText}</span></p>
+                            <p><span>Token提示</span> <span class="badge ${tokenBadgeClass}">${tokenBadgeText}</span></p>
                             <p><span>有效期</span> <span>${rangeText}</span></p>
                         </div>
                         <div class="team-actions">
                             <button onclick="showTeamModal('${team.id}', '${team.name}')" class="btn btn-secondary btn-sm" style="flex:1"><i class="fa-solid fa-users-gear"></i> 管理</button>
+                            <button onclick="openUpdateTokenModal('${team.id}', '${team.name}')" class="btn btn-secondary btn-sm"><i class="fa-solid fa-arrows-rotate"></i> 更新Token</button>
                             <button onclick="deleteTeam('${team.id}')" class="btn btn-danger btn-sm"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
@@ -694,6 +757,15 @@
             });
             html += '</div>';
             container.innerHTML = html;
+
+            if (reminder) {
+                if (expiredCount > 0 || refreshCount > 0) {
+                    reminder.style.display = 'block';
+                    reminder.innerHTML = `<strong>Token 提醒</strong>：${expiredCount} 个已过期，${refreshCount} 个超过 ${TOKEN_REFRESH_DAYS} 天未更新。请点击“更新Token”手动刷新。`;
+                } else {
+                    reminder.style.display = 'none';
+                }
+            }
         }
 
         async function deleteTeam(teamId) {
@@ -704,6 +776,28 @@
                 if (data.success) { loadTeams(); }
                 else alert('错误: ' + data.error);
             } catch (error) { alert('请求失败: ' + error.message); }
+        }
+
+        async function renameTeam(teamId, currentName) {
+            const name = prompt('请输入新的 Team 名称', currentName || '');
+            if (!name) return;
+            const trimmed = name.trim();
+            if (!trimmed || trimmed === currentName) return;
+            try {
+                const response = await fetch(`/api/admin/teams/${teamId}/name`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: trimmed })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadTeams();
+                } else {
+                    alert('错误: ' + data.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
         }
 
         function closeTeamModal() { document.getElementById('teamModal').style.display = 'none'; }
@@ -720,6 +814,44 @@
             document.getElementById('teamModal').style.display = 'block';
             await loadMembers(teamId);
             await loadPendingInvites(teamId);
+        }
+
+        function openUpdateTokenModal(teamId, teamName) {
+            updatingTeamId = teamId;
+            updatingTeamName = teamName || '';
+            document.getElementById('updateTokenTeamName').value = updatingTeamName;
+            document.getElementById('updateTokenSessionInput').value = '';
+            document.getElementById('updateTokenModal').style.display = 'block';
+            setTimeout(() => document.getElementById('updateTokenSessionInput').focus(), 100);
+        }
+
+        function closeUpdateTokenModal() {
+            document.getElementById('updateTokenModal').style.display = 'none';
+        }
+
+        async function submitUpdateToken() {
+            if (!updatingTeamId) return;
+            const sessionData = document.getElementById('updateTokenSessionInput').value.trim();
+            if (!sessionData) {
+                alert('请粘贴 Session JSON');
+                return;
+            }
+            try {
+                const response = await fetch(`/api/admin/teams/${updatingTeamId}/token`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_data: sessionData })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    closeUpdateTokenModal();
+                    loadTeams();
+                } else {
+                    alert('错误: ' + data.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
         }
 
         function openInviteModal() {
