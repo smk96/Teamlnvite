@@ -13,6 +13,7 @@ export interface Team {
   email?: string;
   tokenErrorCount: number;
   tokenStatus: "active" | "expired";
+  tokenUpdatedAt?: number;
   memberCount: number; // Cached count
   lastInviteAt?: number;
   createdAt: number;
@@ -69,6 +70,7 @@ export const DB = {
       id,
       tokenErrorCount: 0,
       tokenStatus: "active",
+      tokenUpdatedAt: Date.now(),
       memberCount: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
