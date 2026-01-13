@@ -402,13 +402,37 @@ router.put("/api/admin/teams/:id/token", async (ctx) => {
   const { session_data } = body;
   try {
     const session = JSON.parse(session_data);
+    if (!session?.accessToken) {
+      ctx.response.status = 400;
+      ctx.response.body = { success: false, error: "Invalid Session JSON: Missing accessToken" };
+      return;
+    }
     await DB.updateTeam(id, {
       accessToken: session.accessToken,
       tokenStatus: "active",
-      tokenErrorCount: 0
+      tokenErrorCount: 0,
+      tokenUpdatedAt: Date.now()
     });
     ctx.response.body = { success: true };
   } catch (e) {
+    ctx.response.body = { success: false, error: "Update failed" };
+  }
+});
+
+router.put("/api/admin/teams/:id/name", async (ctx) => {
+  const id = ctx.params.id;
+  const body = await ctx.request.body.json();
+  const name = String(body?.name || "").trim();
+  if (!name) {
+    ctx.response.status = 400;
+    ctx.response.body = { success: false, error: "Name is required" };
+    return;
+  }
+  try {
+    await DB.updateTeam(id, { name });
+    ctx.response.body = { success: true };
+  } catch {
+    ctx.response.status = 500;
     ctx.response.body = { success: false, error: "Update failed" };
   }
 });
