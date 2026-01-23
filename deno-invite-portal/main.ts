@@ -357,6 +357,45 @@ router.get("/api/admin/teams/export", async (ctx) => {
   ctx.response.body = lines.join("\n");
 });
 
+router.get("/api/admin/teams/search", async (ctx) => {
+  const query = String(ctx.request.url.searchParams.get("q") || "").trim().toLowerCase();
+  const teams = await DB.listTeams();
+  const refreshed = await Promise.all(
+    teams.map(async (team) => {
+      let memberCount = team.memberCount || 0;
+      let tokenStatus = team.tokenStatus;
+      let memberEmails: string[] = [];
+      try {
+        const members = await fetchTeamMembers(team.accessToken, team.accountId);
+        const memberList = Array.isArray(members) ? members : [];
+        const nonOwnerMembers = memberList.filter((m: any) => m?.role !== "account-owner");
+        memberCount = nonOwnerMembers.length;
+        tokenStatus = "active";
+        memberEmails = memberList
+          .map((m: any) =>
+            m?.email || m?.email_address || m?.user?.email || m?.user?.email_address || ""
+          )
+          .map((e: string) => String(e).trim().toLowerCase())
+          .filter(Boolean);
+      } catch {
+        tokenStatus = "expired";
+      }
+      const updated = await DB.updateTeam(team.id, { memberCount, tokenStatus });
+      return { updated, memberEmails };
+    })
+  );
+
+  const filtered = query
+    ? refreshed.filter(({ updated, memberEmails }) => {
+        const accountId = String(updated.accountId || "").toLowerCase();
+        if (accountId.includes(query)) return true;
+        return memberEmails.some((email) => email.includes(query));
+      })
+    : refreshed;
+
+  ctx.response.body = { success: true, teams: filtered.map((item) => item.updated) };
+});
+
 router.post("/api/admin/teams", async (ctx) => {
   const body = await ctx.request.body.json();
   const { name, session_data } = body;
