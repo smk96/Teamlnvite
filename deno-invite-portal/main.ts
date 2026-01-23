@@ -231,6 +231,34 @@ async function kickMember(accessToken: string, accountId: string, userId: string
   return true;
 }
 
+async function updateMemberRole(accessToken: string, accountId: string, userId: string, role: string) {
+  const url = `https://chatgpt.com/backend-api/accounts/${accountId}/users/${userId}`;
+  const headers = {
+    "accept": "*/*",
+    "authorization": `Bearer ${accessToken}`,
+    "chatgpt-account-id": accountId,
+    "content-type": "application/json",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  };
+
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ role })
+  });
+
+  if (res.status !== 200 && res.status !== 204) {
+    const text = await res.text();
+    throw new Error(`Role update failed: ${res.status} - ${text}`);
+  }
+
+  if (res.status === 204) {
+    return { role };
+  }
+
+  return await res.json();
+}
+
 async function createCheckoutLink(accessToken: string) {
   const url = "https://chatgpt.com/backend-api/payments/checkout";
   const headers = {
@@ -542,6 +570,69 @@ router.delete("/api/admin/teams/:id/members/:userId", async (ctx) => {
   } catch (e) {
     ctx.response.status = 500;
     ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Kick failed" };
+  }
+});
+
+router.post("/api/admin/teams/:id/downgrade", async (ctx) => {
+  const team = await DB.getTeam(ctx.params.id);
+  if (!team) {
+    ctx.response.status = 404;
+    ctx.response.body = { success: false, error: "Team not found" };
+    return;
+  }
+
+  let targetRole = "standard-user";
+  try {
+    if (ctx.request.hasBody) {
+      const body = await ctx.request.body.json();
+      const role = String(body?.role || "").trim();
+      if (role) targetRole = role;
+    }
+  } catch {
+    // ignore body parse errors
+  }
+
+  try {
+    const members = await fetchTeamMembers(team.accessToken, team.accountId);
+    const list = Array.isArray(members) ? members : [];
+    const teamEmail = String(team.email || "").trim().toLowerCase();
+
+    const extractEmail = (m: any) =>
+      String(m?.email || m?.email_address || m?.user?.email || m?.user?.email_address || "")
+        .trim()
+        .toLowerCase();
+
+    let targetMember: any = null;
+    if (teamEmail) {
+      targetMember = list.find((m: any) => extractEmail(m) === teamEmail) || null;
+    }
+    if (!targetMember) {
+      targetMember = list.find((m: any) => m?.role === "account-owner") || null;
+    }
+
+    if (!targetMember) {
+      ctx.response.status = 404;
+      ctx.response.body = { success: false, error: "Owner not found" };
+      return;
+    }
+
+    const userId = targetMember?.user_id || targetMember?.id || targetMember?.user?.id || "";
+    if (!userId) {
+      ctx.response.status = 400;
+      ctx.response.body = { success: false, error: "Missing user id" };
+      return;
+    }
+
+    const result = await updateMemberRole(team.accessToken, team.accountId, userId, targetRole);
+    ctx.response.body = {
+      success: true,
+      userId,
+      role: result?.role || targetRole,
+      email: extractEmail(targetMember)
+    };
+  } catch (e) {
+    ctx.response.status = 500;
+    ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Role update failed" };
   }
 });
 
