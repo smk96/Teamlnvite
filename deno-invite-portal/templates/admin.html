@@ -430,11 +430,16 @@
                 <span class="close" onclick="closeTeamModal()">&times;</span>
             </div>
             <div class="modal-body">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px;">
                     <h3 style="font-size: 14px; color: var(--text-secondary); margin: 0;">成员列表</h3>
-                    <button onclick="openInviteModal()" class="btn btn-primary btn-sm" style="padding: 4px 10px; font-size: 12px;">
-                        <i class="fa-solid fa-paper-plane"></i> 直接邀请
-                    </button>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button onclick="downgradeOwner()" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 12px;">
+                            <i class="fa-solid fa-arrow-down"></i> 降价
+                        </button>
+                        <button onclick="openInviteModal()" class="btn btn-primary btn-sm" style="padding: 4px 10px; font-size: 12px;">
+                            <i class="fa-solid fa-paper-plane"></i> 直接邀请
+                        </button>
+                    </div>
                 </div>
                 <div id="membersList" style="background: #f8fafc; border-radius: 8px; border: 1px solid var(--border-color);">加载中...</div>
                 
@@ -1205,6 +1210,27 @@
 
         function closeCheckoutModal() {
             document.getElementById('checkoutModal').style.display = 'none';
+        }
+
+        async function downgradeOwner() {
+            if (!currentTeamId) return;
+            if (!confirm('确定要执行降价操作吗？将尝试把母号降为 standard-user。')) return;
+            try {
+                const res = await fetch(`/api/admin/teams/${currentTeamId}/downgrade`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role: 'standard-user' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`降价成功: ${data.email || data.userId} -> ${data.role}`);
+                    await loadMembers(currentTeamId);
+                } else {
+                    alert('降价失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            }
         }
 
         function copyCheckoutLink() {
