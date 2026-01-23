@@ -1214,7 +1214,6 @@
 
         async function downgradeOwner() {
             if (!currentTeamId) return;
-            if (!confirm('确定要执行降价操作吗？将尝试把母号降为 standard-user。')) return;
             try {
                 const res = await fetch(`/api/admin/teams/${currentTeamId}/downgrade`, {
                     method: 'POST',
