@@ -46,12 +46,45 @@
             padding: 20px 0;
         }
 
-        .header h1 { 
-            font-size: 24px; 
-            font-weight: 600; 
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+
+        .teams-toolbar {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .teams-search {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .teams-search-input {
+            width: 220px;
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+
+        @media (max-width: 640px) {
+            .teams-toolbar {
+                width: 100%;
+                justify-content: flex-end;
+            }
+            .teams-search {
+                flex: 1 1 100%;
+            }
+            .teams-search-input {
+                width: 100%;
+            }
         }
 
         .grid-layout {
@@ -368,7 +401,13 @@
             <div class="card full-width">
                 <h2>
                     <i class="fa-solid fa-users"></i> Teams 列表
-                    <div style="margin-left: auto; display: flex; gap: 8px;">
+                    <div class="teams-toolbar">
+                        <div class="teams-search">
+                            <input type="text" id="teamsSearchInput" class="teams-search-input" placeholder="搜索母号或成员邮箱" onkeydown="handleTeamsSearchKey(event)">
+                            <button onclick="searchTeams()" class="btn btn-sm btn-secondary">
+                                <i class="fa-solid fa-magnifying-glass"></i> 搜索
+                            </button>
+                        </div>
                         <button onclick="exportTeamsTxt()" class="btn btn-sm btn-secondary">
                             <i class="fa-regular fa-file-lines"></i> 导出 TXT
                         </button>
@@ -687,6 +726,37 @@
                 const data = await response.json();
                 if (data.success) displayTeams(data.teams);
             } catch (error) { console.error('加载 Teams 失败:', error); }
+        }
+
+        function getTeamsSearchQuery() {
+            const input = document.getElementById('teamsSearchInput');
+            return input ? input.value.trim() : '';
+        }
+
+        async function searchTeams() {
+            const query = getTeamsSearchQuery();
+            if (!query) {
+                loadTeams();
+                return;
+            }
+            const container = document.getElementById('teamsList');
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>';
+            try {
+                const response = await fetch(`/api/admin/teams/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                if (data.success) displayTeams(data.teams);
+                else container.innerHTML = `<div style="padding:10px; color:var(--danger);">搜索失败: ${data.error || '未知错误'}</div>`;
+            } catch (error) {
+                container.innerHTML = `<div style="padding:10px; color:var(--danger);">搜索失败: ${error.message}</div>`;
+                console.error('搜索 Teams 失败:', error);
+            }
+        }
+
+        function handleTeamsSearchKey(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchTeams();
+            }
         }
 
         function formatDateTime(value) {
@@ -1180,3 +1250,4 @@
     </script>
 </body>
 </html>
+
