@@ -277,7 +277,8 @@ async function createCheckoutLink(accessToken: string, mode: "new" | "old") {
       seat_quantity: 5
     },
     billing_details: {
-      country: "DE"
+      country: "DE",
+      currency: "EUR"
     },
     promo_campaign: {
       promo_campaign_id: "team-1-month-free",
