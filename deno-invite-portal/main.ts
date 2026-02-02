@@ -276,6 +276,9 @@ async function createCheckoutLink(accessToken: string, mode: "new" | "old") {
       price_interval: "month",
       seat_quantity: 5
     },
+    billing_details: {
+      country: "DE"
+    },
     promo_campaign: {
       promo_campaign_id: "team-1-month-free",
       is_coupon_from_query_param: true
