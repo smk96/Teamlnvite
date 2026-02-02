@@ -259,7 +259,7 @@ async function updateMemberRole(accessToken: string, accountId: string, userId: 
   return await res.json();
 }
 
-async function createCheckoutLink(accessToken: string) {
+async function createCheckoutLink(accessToken: string, mode: "new" | "old") {
   const url = "https://chatgpt.com/backend-api/payments/checkout";
   const headers = {
     "accept": "*/*",
@@ -268,6 +268,7 @@ async function createCheckoutLink(accessToken: string) {
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   };
 
+  const isNewMode = mode === "new";
   const payload = {
     plan_name: "chatgptteamplan",
     team_plan_data: {
@@ -279,7 +280,7 @@ async function createCheckoutLink(accessToken: string) {
       promo_campaign_id: "team-1-month-free",
       is_coupon_from_query_param: true
     },
-    checkout_ui_mode: "redirect"
+    checkout_ui_mode: isNewMode ? "custom" : "redirect"
   };
 
   const res = await fetch(url, {
@@ -293,7 +294,22 @@ async function createCheckoutLink(accessToken: string) {
     throw new Error(`Checkout failed: ${res.status} - ${text}`);
   }
 
-  return await res.json();
+  const data = await res.json();
+
+  if (isNewMode) {
+    const sessionId = data?.checkout_session_id;
+    if (!sessionId) {
+      throw new Error("Missing checkout_session_id");
+    }
+    const processor = data?.processor_entity || "openai_llc";
+    return { url: `https://chatgpt.com/checkout/${processor}/${sessionId}` };
+  }
+
+  if (!data?.url) {
+    throw new Error("Missing checkout url");
+  }
+
+  return { url: data.url };
 }
 
 // --- Routes ---
@@ -818,7 +834,8 @@ router.delete("/api/admin/keys/:code", async (ctx) => {
 router.post("/api/admin/checkout-link", async (ctx) => {
   try {
     const body = await ctx.request.body.json();
-    const { session_data } = body;
+    const { session_data, page_mode } = body;
+    const mode = page_mode === "new" ? "new" : "old";
     let accessToken = "";
 
     if (session_data) {
@@ -842,8 +859,8 @@ router.post("/api/admin/checkout-link", async (ctx) => {
        accessToken = activeTeam.accessToken;
     }
 
-    const data = await createCheckoutLink(accessToken);
-    ctx.response.body = { success: true, url: data.url };
+    const data = await createCheckoutLink(accessToken, mode);
+    ctx.response.body = { success: true, url: data.url, mode };
   } catch (e) {
     ctx.response.status = 500;
     ctx.response.body = { success: false, error: e instanceof Error ? e.message : "Checkout failed" };
