@@ -129,10 +129,11 @@
             color: var(--text-secondary);
         }
 
-        input[type="text"], 
-        input[type="email"], 
-        input[type="number"], 
-        textarea { 
+        input[type="text"],
+        input[type="email"],
+        input[type="number"],
+        select,
+        textarea {
             width: 100%; 
             padding: 10px 12px; 
             border: 1px solid var(--border-color); 
@@ -335,6 +336,13 @@
                     <div class="form-group">
                         <label>Session JSON</label>
                         <textarea name="session_data" id="sessionDataInput" required placeholder='{"user": {...}, "accessToken": "..."}'></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>付款模式</label>
+                        <select id="checkoutModeSelect">
+                            <option value="old" selected>老页面 (redirect)</option>
+                            <option value="new">新页面 (custom)</option>
+                        </select>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button type="submit" class="btn btn-primary" style="flex: 1;"><i class="fa-solid fa-check"></i> 添加 Team</button>
@@ -1177,16 +1185,18 @@
 
         async function getAccountCheckoutLink() {
             const sessionData = document.getElementById('sessionDataInput').value;
+            const modeSelect = document.getElementById('checkoutModeSelect');
+            const pageMode = modeSelect ? modeSelect.value : 'old';
             if (!sessionData) {
                 alert("请先在上方输入 Session JSON");
                 return;
             }
 
             try {
-                const res = await fetch("/api/admin/checkout-link", { 
+                const res = await fetch("/api/admin/checkout-link", {
                     method: "POST",
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_data: sessionData })
+                    body: JSON.stringify({ session_data: sessionData, page_mode: pageMode })
                 });
                 const data = await res.json();
                 if (data.success && data.url) {
